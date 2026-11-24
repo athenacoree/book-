@@ -1273,6 +1273,38 @@ internal fun injectLuminaGameBridge(
     } catch (_) {}
   };
 
+  // 2.5. Lightweight interaction audio for HTML games without their own sound controls.
+  var _uiAudio = null;
+  var _lastUiSound = 0;
+  function playUiTick() {
+    if (window.__luminaMuted || document.hidden) return;
+    var now = Date.now();
+    if (now - _lastUiSound < 75) return;
+    _lastUiSound = now;
+    try {
+      _uiAudio = _uiAudio || new (window.AudioContext || window.webkitAudioContext)();
+      if (_uiAudio.state === 'suspended') _uiAudio.resume();
+      var osc = _uiAudio.createOscillator();
+      var gain = _uiAudio.createGain();
+      var t = _uiAudio.currentTime;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(620, t);
+      osc.frequency.exponentialRampToValueAtTime(410, t + 0.055);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.012, t + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+      osc.connect(gain); gain.connect(_uiAudio.destination);
+      osc.start(t); osc.stop(t + 0.07);
+    } catch (_) {}
+  }
+  document.addEventListener('click', function(event) {
+    var target = event.target && event.target.closest ? event.target.closest('button,[role="button"],input[type="button"],input[type="submit"]') : null;
+    if (!target) return;
+    if (target.id === 'sound' || target.id === 'soundBtn' || target.id === 'soundToggle' || /mute|volume|sound/i.test(target.getAttribute('aria-label') || '')) return;
+    if (document.querySelector('#soundBtn,#soundToggle,#sound')) return;
+    playUiTick();
+  }, true);
+
   // 3. Persistent Room-Backed localStorage Hydrate & Auto-Sync
   try {
     if (window.LuminaGameBridge && window.localStorage) {
