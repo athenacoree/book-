@@ -20,13 +20,13 @@
 (()=>{
 const cv=document.getElementById('game'),ctx=cv.getContext('2d'),$=id=>document.getElementById(id);
 const N=13,C=40,tiles=Array.from({length:N},()=>Array(N).fill(1));
-let level=1,gems=0,lives=3,px=1,py=1,crystals=[],foes=[],exit={x:11,y:11},running=false,paused=false,won=false,steps=0,sound=!(window.LuminaBook&&window.LuminaBook.isMuted()),audioCtx=null;
+let level=1,gems=0,lives=3,px=1,py=1,crystals=[],foes=[],exit={x:11,y:11},running=false,paused=false,won=false,steps=0,sound=true,audioCtx=null;
 const saved=(()=>{try{return JSON.parse(localStorage.getItem('aether-crypt-save')||'{}')}catch(e){return {}}})();
 if(saved.level){level=Math.max(1,Math.min(12,saved.level));}
 function audioReady(){if(!sound||window.__luminaMuted)return false;try{audioCtx=audioCtx||new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();return true}catch(e){return false}}
 function tone(freq,dur=.12,wave='sine'){if(!audioReady())return;try{let o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime;o.type=wave;o.frequency.value=freq;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.04,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+dur+.02)}catch(e){}}
 function sfx(k){let a={move:[280,.045],gem:[660,.1],portal:[440,.12],hit:[150,.2],win:[523,.12],start:[392,.12],click:[740,.06]};let n=a[k]||a.click;tone(n[0],n[1],k==='hit'?'sawtooth':'triangle')}
-window.addEventListener('lumina:mute',e=>{if(e.detail&&e.detail.muted)sound=false;$('sound').textContent='♫ '+(sound?'sí':'no')});
+window.addEventListener('lumina:mute',e=>{$('sound').textContent='♫ '+((sound&&!window.__luminaMuted)?'sí':'no')});
 function rnd(n){return Math.floor(Math.random()*n)}
 function carve(x,y){tiles[y][x]=0;let ds=[[0,-2],[2,0],[0,2],[-2,0]].sort(()=>Math.random()-.5);for(const [dx,dy] of ds){let nx=x+dx,ny=y+dy;if(nx>0&&ny>0&&nx<N-1&&ny<N-1&&tiles[ny][nx]){tiles[y+dy/2][x+dx/2]=0;carve(nx,ny)}}}
 function path(x,y){return x>0&&y>0&&x<N-1&&y<N-1&&tiles[y][x]===0}
@@ -47,7 +47,7 @@ function show(t,p,b){$('overTitle').textContent=t;$('overText').textContent=p;$(
 function start(){audioReady();sfx('start');if(won||lives<=0){level=1;lives=3;won=false}running=true;paused=false;$('overlay').classList.remove('show');$('msg').textContent='¡Explora, recoge los cristales y encuentra el portal!';if(!tiles[1][1]&&crystals.length)draw();else build()}
 function key(e){let map={ArrowUp:[0,-1],w:[0,-1],ArrowDown:[0,1],s:[0,1],ArrowLeft:[-1,0],a:[-1,0],ArrowRight:[1,0],d:[1,0]};if(map[e.key]){e.preventDefault();move(...map[e.key])}}
 document.addEventListener('keydown',key);document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>move(...b.dataset.m.split(',').map(Number))));
-$('start').onclick=start;$('pause').onclick=()=>{if(!running)return;paused=!paused;$('msg').textContent=paused?'Juego pausado.':'¡Continúa la aventura!'};$('restart').onclick=()=>{lives=3;build();running=true;paused=false;$('overlay').classList.remove('show');$('msg').textContent='Nivel reiniciado.'};$('sound').onclick=()=>{sound=!sound;if(sound){audioReady();sfx('click')}$('sound').textContent='♫ '+(sound?'sí':'no');$('msg').textContent=sound?'Efectos de sonido activados.':'Sonido silenciado.'};$('sound').textContent='♫ '+(sound?'sí':'no');
+$('start').onclick=start;$('pause').onclick=()=>{if(!running)return;paused=!paused;$('msg').textContent=paused?'Juego pausado.':'¡Continúa la aventura!'};$('restart').onclick=()=>{lives=3;build();running=true;paused=false;$('overlay').classList.remove('show');$('msg').textContent='Nivel reiniciado.'};$('sound').onclick=()=>{sound=!sound;if(sound){audioReady();sfx('click')}$('sound').textContent='♫ '+((sound&&!window.__luminaMuted)?'sí':'no');$('msg').textContent=sound?'Efectos de sonido activados.':'Sonido silenciado.'};$('sound').textContent='♫ '+(sound?'sí':'no');
 build();draw();
 })();
 </script></body></html>
