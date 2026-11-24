@@ -51,6 +51,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
@@ -633,12 +635,24 @@ private fun OnlineCatalogGameRow(
                     AsyncImage(model = game.coverPath, contentDescription = "Portada de ${game.title}",
                         contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("🎮", style = MaterialTheme.typography.headlineLarge)
-                        Text("GITBOOK", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Text("PLAY", style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Black)
+                    val coverColors = when {
+                        game.slug.contains("zoom", true) -> listOf(Color(0xFF102A43), Color(0xFF18A7B8), Color(0xFF5B4BC4))
+                        game.slug.contains("crypt", true) -> listOf(Color(0xFF191B3A), Color(0xFF62539A), Color(0xFFD5A94B))
+                        game.slug.contains("aether", true) -> listOf(Color(0xFF082F49), Color(0xFF0E7490), Color(0xFF9A7BBD))
+                        game.slug.contains("2048") -> listOf(Color(0xFF9A3412), Color(0xFFEA580C), Color(0xFFFBBF24))
+                        game.slug.contains("memory") -> listOf(Color(0xFF312E81), Color(0xFF7C3AED), Color(0xFFEC4899))
+                        else -> listOf(Color(0xFF172554), Color(0xFF2563EB), Color(0xFF38BDF8))
+                    }
+                    Box(Modifier.fillMaxSize().background(Brush.linearGradient(coverColors))) {
+                        Text("GITBOOK PLAY", Modifier.align(Alignment.TopStart).padding(8.dp),
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text("✦", Modifier.align(Alignment.Center),
+                            color = Color.White.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.displayMedium)
+                        Text(game.title.uppercase(), Modifier.align(Alignment.BottomStart).padding(8.dp),
+                            color = Color.White, style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Black, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
