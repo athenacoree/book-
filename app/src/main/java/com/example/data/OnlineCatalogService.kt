@@ -168,7 +168,11 @@ class OnlineCatalogService {
             authorization = "Bearer $anonKey",
             itemType = "eq.game",
             title = catalogTitleFilter(normalizedQuery)
-        )
+        ).map { item ->
+            item.copy(
+                coverPath = item.coverPath?.takeIf { it.isNotBlank() }?.let { publicStorageUrl(it) }
+            )
+        }
     }
 
     suspend fun downloadCatalogAsset(path: String): ByteArray = downloadBytes(publicStorageUrl(path))
