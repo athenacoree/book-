@@ -101,9 +101,9 @@ class OnlineCatalogService {
     private val apiKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY.trim()
     private val anonKey = BuildConfig.SUPABASE_ANON_KEY.trim()
     private val client = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS)
-        .callTimeout(3, TimeUnit.MINUTES)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .callTimeout(2, TimeUnit.MINUTES)
         .followRedirects(true)
         .build()
 
@@ -133,7 +133,7 @@ class OnlineCatalogService {
             authorization = "Bearer $anonKey",
             itemType = "eq.book",
             fileFormat = "eq.epub",
-            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
+            title = catalogTitleFilter(normalizedQuery)
         )
         items.asSequence()
             .filter { languageCode.isNullOrBlank() || it.languageCode.equals(languageCode, ignoreCase = true) }
@@ -167,22 +167,24 @@ class OnlineCatalogService {
             apiKey = apiKey,
             authorization = "Bearer $anonKey",
             itemType = "eq.game",
-            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
+            title = catalogTitleFilter(normalizedQuery)
         )
     }
 
     suspend fun downloadCatalogAsset(path: String): ByteArray = downloadBytes(publicStorageUrl(path))
 
     suspend fun downloadBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
+        requireAllowedDownloadUrl(url)
         val req = Request.Builder().url(url).get().build()
         client.newCall(req).execute().use { response ->
             if (!response.isSuccessful) throw IllegalStateException("Error HTTP ${response.code}")
+            requireAllowedDownloadUrl(response.request.url.toString())
             val body = response.body ?: throw IllegalStateException("Respuesta vacía")
-            val maxBytes = 200L * 1024L * 1024L
-            if (body.contentLength() > maxBytes) {
-                throw IllegalStateException("El archivo supera el límite de descarga de 200 MiB")
-            }
-            val output = ByteArrayOutputStream()
+            val maxBytes = 64L * 1024L * 1024L
+            if (body.contentLength() == 0L) throw IllegalStateException("El archivo descargado está vacío")
+            if (body.contentLength() > maxBytes) throw IllegalStateException("El archivo supera el límite de descarga de 64 MiB")
+            val initialCapacity = body.contentLength().takeIf { it > 0L }?.coerceAtMost(262144L)?.toInt() ?: 32768
+            val output = ByteArrayOutputStream(initialCapacity)
             body.byteStream().use { input ->
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                 var total = 0L
@@ -190,14 +192,26 @@ class OnlineCatalogService {
                     val read = input.read(buffer)
                     if (read < 0) break
                     total += read
-                    if (total > maxBytes) {
-                        throw IllegalStateException("El archivo supera el límite de descarga de 200 MiB")
-                    }
+                    if (total > maxBytes) throw IllegalStateException("El archivo supera el límite de descarga de 64 MiB")
                     output.write(buffer, 0, read)
                 }
             }
+            if (output.size() == 0) throw IllegalStateException("El archivo descargado está vacío")
             output.toByteArray()
         }
+    }
+
+    private fun catalogTitleFilter(query: String?): String? {
+        val safe = query?.filter { it.isLetterOrDigit() || it.isWhitespace() || it == '-' || it == 39.toChar() }
+            ?.trim()?.take(80)?.takeIf { it.isNotBlank() } ?: return null
+        return "ilike.*$safe*"
+    }
+
+    private fun requireAllowedDownloadUrl(rawUrl: String) {
+        val uri = Uri.parse(rawUrl)
+        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "raw.githubusercontent.com")
+        require(uri.scheme.equals("https", true) && uri.userInfo == null && uri.port == -1 &&
+            uri.host?.lowercase() in allowedHosts) { "La dirección de descarga no está permitida" }
     }
 
     private fun publicStorageUrl(path: String): String {
@@ -235,7 +249,8 @@ class NetworkMonitor(private val context: Context) {
             ?: return false
         val network = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     val isOnlineFlow: Flow<Boolean> = callbackFlow {
@@ -250,7 +265,7 @@ class NetworkMonitor(private val context: Context) {
 
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                trySend(true)
+                trySend(isCurrentlyOnline())
             }
 
             override fun onLost(network: Network) {
@@ -258,7 +273,8 @@ class NetworkMonitor(private val context: Context) {
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                trySend(networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET))
+                trySend(networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
             }
         }
 
