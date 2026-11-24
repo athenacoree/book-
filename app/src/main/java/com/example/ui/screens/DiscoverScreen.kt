@@ -613,6 +613,7 @@ private fun OnlineCatalogBookRow(
 private fun OnlineCatalogGameRow(
     game: SupabaseCatalogItem,
     isDownloaded: Boolean,
+    installedVersion: String?,
     isDownloading: Boolean,
     onDownload: () -> Unit,
     onOpen: () -> Unit
