@@ -28,8 +28,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
       - name: Create temporary Android debug keystore
         run: |
@@ -43,7 +45,7 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000
 
       - name: Run unit tests and assemble Debug APK
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
