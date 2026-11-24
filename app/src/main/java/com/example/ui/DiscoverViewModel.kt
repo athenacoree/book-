@@ -32,6 +32,7 @@ data class DiscoverUiState(
     val loadState: CatalogLoadState = CatalogLoadState.Loading,
     val downloadingIds: Set<Int> = emptySet(),
     val downloadedLibraryIds: Set<String> = emptySet(),
+    val installedGameVersions: Map<Long, String> = emptyMap(),
     val downloadFeedback: String? = null,
     val selectedCatalogSection: String = "books",
     val games: List<SupabaseCatalogItem> = emptyList(),
@@ -124,6 +125,9 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             loadState = effectiveState,
             downloadingIds = downloads.bookIds,
             downloadedLibraryIds = base.libraryBooks.map { it.id }.toSet(),
+            installedGameVersions = base.libraryBooks.mapNotNull { book ->
+                book.catalogGameId?.let { it to book.gameVersion }
+            }.toMap(),
             downloadFeedback = downloads.feedback,
             selectedCatalogSection = gameCatalog.selectedSection,
             games = gameCatalog.games,
