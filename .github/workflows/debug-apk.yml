@@ -1,4 +1,4 @@
-name: LuminaBook Debug APK
+name: GITBOOK Debug APK
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: luminabook-debug-${{ github.ref }}
+  group: gitbook-debug-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -54,7 +54,7 @@ jobs:
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LuminaBook-debug-${{ github.run_number }}
+          name: GITBOOK-debug-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 3
