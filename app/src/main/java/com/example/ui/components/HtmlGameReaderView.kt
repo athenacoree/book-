@@ -750,10 +750,11 @@ fun HtmlGameReaderView(
                     CircularProgressIndicator(color = colors.accent)
                     Spacer(modifier = Modifier.size(10.dp))
                     Text(
-                        text = if (preferences.htmlGameSafeSoftwareMode) {
-                            "Cargando en Modo Seguro…"
-                        } else {
-                            "Cargando juego HTML…"
+                        text = when {
+                            preferences.htmlGameSafeSoftwareMode -> "Abriendo en modo de compatibilidad…"
+                            loadProgress < 25 -> "Preparando el juego y sus archivos…"
+                            loadProgress < 60 -> "Cargando recursos visuales y sonido…"
+                            else -> "Restaurando tu partida…"
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.text
