@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+      - feature/online-catalog-games-debug-apk
   workflow_dispatch:
 
 permissions:
