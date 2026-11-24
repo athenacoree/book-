@@ -314,12 +314,8 @@ fun BookOpening3DOverlay(
     val e = entryProgress.value.coerceIn(0f, 1f)
     val o = openProgress.value.coerceIn(0f, 1f)
 
-    // Transition smoothly to 100% opaque curtain early in expansion so books underneath NEVER show through.
-    val curtainDarkAlpha = if (!isExpanding) {
-        0.78f * e
-    } else {
-        (0.78f + (o * 3.0f).coerceAtMost(0.22f)).coerceIn(0f, 1f)
-    }
+    // The catalog is blurred by LibraryScreen, but the overlay curtain stays fully opaque.
+    // This prevents any book cards or scrolling content from bleeding through the preview.
     val fullPaperRevealAlpha = if (!isExpanding) 0f else ((o - 0.55f) / 0.35f).coerceIn(0f, 1f)
 
     val cardScale = if (!isExpanding) {
@@ -338,7 +334,7 @@ fun BookOpening3DOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF13110F).copy(alpha = curtainDarkAlpha))
+            .background(Color(0xFF13110F))
             .clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
