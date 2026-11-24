@@ -10,6 +10,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -127,79 +128,6 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .then(if (backdropBlur > 0.dp) Modifier.blur(backdropBlur) else Modifier)
         ) {
-            // Minimal Centered Top Controls: Dark Mode & Grid/List View Toggle
-            val sysDark = isSystemInDarkTheme()
-            val isDarkEffective = when (uiState.appThemeMode) {
-                AppThemeMode.SYSTEM -> sysDark
-                AppThemeMode.LIGHT -> false
-                AppThemeMode.DARK -> true
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    tonalElevation = 2.dp,
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.border(
-                        0.75.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        RoundedCornerShape(24.dp)
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        IconButton(
-                            onClick = {
-                                onSetAppThemeMode(if (isDarkEffective) AppThemeMode.LIGHT else AppThemeMode.DARK)
-                            },
-                            modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .testTag("library_theme_toggle")
-                        ) {
-                            AnimatedContent(targetState = isDarkEffective, label = "headerThemeIcon") { dark ->
-                                Icon(
-                                    imageVector = if (dark) Icons.Filled.DarkMode else Icons.Filled.LightMode,
-                                    contentDescription = if (dark) "Cambiar a modo claro" else "Cambiar a modo oscuro",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(20.dp)
-                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-                        )
-
-                        IconButton(
-                            onClick = onToggleLayout,
-                            modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .testTag("toggle_layout_button")
-                        ) {
-                            Icon(
-                                imageVector = if (uiState.isGridLayout) {
-                                    Icons.AutoMirrored.Filled.ViewList
-                                } else {
-                                    Icons.Filled.GridView
-                                },
-                                contentDescription = if (uiState.isGridLayout) "Ver como lista" else "Ver como cuadrícula",
-                                tint = MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                    }
-                }
-            }
-
             // Conversion Progress / Completion / Error Banners
             AnimatedVisibility(visible = uiState.activeConversion != null) {
                 uiState.activeConversion?.let { conv ->
@@ -325,15 +253,15 @@ fun LibraryScreen(
                 )
             } else if (uiState.isGridLayout) {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 154.dp),
+                    columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(
                         start = 20.dp,
                         end = 20.dp,
                         top = 4.dp,
-                        bottom = 96.dp
+                        bottom = 120.dp
                     ),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     uiState.continueReadingBook?.let { featured ->
@@ -368,17 +296,6 @@ fun LibraryScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    uiState.continueReadingBook?.let { featured ->
-                        item(key = "hero_${featured.id}") {
-                            ContinueReadingHeroCard(
-                                book = featured,
-                                sensorTiltX = sensorTiltX,
-                                sensorTiltY = sensorTiltY,
-                                onOpen = { openingBookId = featured.id }
-                            )
-                        }
-                    }
-
                     items(displayBooks, key = { it.id }) { book ->
                         BookListItem(
                             book = book,
@@ -386,6 +303,30 @@ fun LibraryScreen(
                             onMoreClick = { selectedBookForMenu = book }
                         )
                     }
+                }
+            }
+        }
+
+        // Appearance and layout controls moved to the lower edge
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            tonalElevation = 5.dp,
+            shadowElevation = 8.dp,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 22.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
+                val sysDark = isSystemInDarkTheme()
+                val isDarkEffective = when (uiState.appThemeMode) {
+                    AppThemeMode.SYSTEM -> sysDark
+                    AppThemeMode.LIGHT -> false
+                    AppThemeMode.DARK -> true
+                }
+                IconButton(onClick = { onSetAppThemeMode(if (isDarkEffective) AppThemeMode.LIGHT else AppThemeMode.DARK) }, modifier = Modifier.testTag("library_theme_toggle")) {
+                    Icon(if (isDarkEffective) Icons.Filled.DarkMode else Icons.Filled.LightMode, contentDescription = "Cambiar apariencia", tint = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onToggleLayout, modifier = Modifier.testTag("toggle_layout_button")) {
+                    Icon(if (uiState.isGridLayout) Icons.AutoMirrored.Filled.ViewList else Icons.Filled.GridView, contentDescription = "Cambiar cuadrícula o lista")
                 }
             }
         }
@@ -673,14 +614,16 @@ private fun BookGridItem(
                     sensorTiltX = sensorTiltX,
                     sensorTiltY = sensorTiltY
                 ) {
-                    BookCoverArt(
-                        title = book.title,
-                        author = book.author,
-                        originalFormat = book.originalFormat,
-                        isConverted = book.isConvertedFromOtherFormat,
-                        coverPath = book.coverPath,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)) {
+                        BookCoverArt(
+                            title = book.title,
+                            author = book.author,
+                            originalFormat = book.originalFormat,
+                            isConverted = book.isConvertedFromOtherFormat,
+                            coverPath = book.coverPath,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
                 if (book.isFavorite) {
                     Surface(
