@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.example.data.GutendexBook
 import com.example.data.SupabaseCatalogItem
