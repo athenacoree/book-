@@ -7,10 +7,14 @@ import com.example.data.BookEntity
 import com.example.data.BookRepository
 import com.example.data.BookmarkEntity
 import com.example.data.ReaderPreferences
+import com.example.data.isHtmlGame
+import com.example.engine.EpubChapter
+import com.example.engine.HtmlOrientation
 import com.example.engine.LiveHighlightStyle
 import com.example.engine.LiveUnitMode
 import com.example.engine.PageTransitionStyle
 import com.example.engine.ParsedEpub
+import com.example.engine.ReaderBlock
 import com.example.engine.ReaderFont
 import com.example.engine.ReaderTextAlign
 import com.example.engine.ReaderTheme
@@ -67,7 +71,26 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val book = repository.getBookById(bookId)
                     ?: throw IllegalStateException("Libro no encontrado en la biblioteca")
-                val parsed = repository.loadParsedEpub(book)
+                val parsed = if (book.isHtmlGame) {
+                    runCatching { repository.loadParsedEpub(book) }.getOrElse {
+                        ParsedEpub(
+                            title = book.title,
+                            author = book.author,
+                            coverBytes = null,
+                            chapters = listOf(
+                                EpubChapter(
+                                    index = 0,
+                                    title = book.title,
+                                    blocks = listOf(ReaderBlock.Paragraph(book.description))
+                                )
+                            ),
+                            language = book.language,
+                            genre = book.genre
+                        )
+                    }
+                } else {
+                    repository.loadParsedEpub(book)
+                }
                 repository.syncBookMetadataIfNeeded(book, parsed)
                 val safeChapter = book.currentChapterIndex.coerceIn(0, (parsed.chapters.size - 1).coerceAtLeast(0))
                 _currentChapterIndex.value = safeChapter
@@ -220,5 +243,63 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setLivePunctuationPause(pause: Boolean) {
         viewModelScope.launch { repository.preferencesRepository.setLivePunctuationPause(pause) }
+    }
+
+    fun setHtmlGameNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameNotificationsEnabled(enabled) }
+    }
+
+    fun setHtmlGameFullscreenImmersive(immersive: Boolean) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameFullscreenImmersive(immersive) }
+    }
+
+    fun setHtmlGameZoomPercent(percent: Int) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameZoomPercent(percent) }
+    }
+
+    fun setHtmlGameMuted(muted: Boolean) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameMuted(muted) }
+    }
+
+    fun setHtmlGameSafeSoftwareMode(safeMode: Boolean) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameSafeSoftwareMode(safeMode) }
+    }
+
+    fun setHtmlGameOrientation(orientation: HtmlOrientation) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameOrientation(orientation) }
+    }
+
+    fun setHtmlGameConfirmBackExit(confirm: Boolean) {
+        viewModelScope.launch { repository.preferencesRepository.setHtmlGameConfirmBackExit(confirm) }
+    }
+
+    fun saveHtmlGameState(bookId: String, saveJson: String, explicitRecord: String? = null) {
+        viewModelScope.launch {
+            val (validJson, bestRecord) = repository.saveHtmlGameState(bookId, saveJson, explicitRecord)
+            val current = _loadState.value
+            if (current is ReaderLoadState.Ready && current.book.id == bookId) {
+                _loadState.value = current.copy(
+                    book = current.book.copy(
+                        gameSaveJson = validJson,
+                        gameBestRecord = bestRecord
+                    )
+                )
+            }
+        }
+    }
+
+    fun clearHtmlGameSaveData(bookId: String) {
+        viewModelScope.launch {
+            repository.clearHtmlGameSaveData(bookId)
+            val current = _loadState.value
+            if (current is ReaderLoadState.Ready && current.book.id == bookId) {
+                _loadState.value = current.copy(
+                    book = current.book.copy(
+                        gameSaveJson = "{}",
+                        gameBestRecord = ""
+                    )
+                )
+            }
+        }
     }
 }

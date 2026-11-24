@@ -28,7 +28,9 @@ data class BookEntity(
     val description: String = "",
     val wordCount: Int = 0,
     val estimatedPages: Int = 1,
-    val totalImages: Int = 0
+    val totalImages: Int = 0,
+    val gameSaveJson: String = "{}",
+    val gameBestRecord: String = ""
 )
 
 @Entity(tableName = "bookmarks")
@@ -41,3 +43,7 @@ data class BookmarkEntity(
     val excerpt: String,
     val createdAt: Long = System.currentTimeMillis()
 )
+
+val BookEntity.isHtmlGame: Boolean
+    get() = originalFormat.equals("HTML", ignoreCase = true)
+

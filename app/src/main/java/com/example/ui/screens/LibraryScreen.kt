@@ -44,6 +44,8 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SportsEsports
+import com.example.data.isHtmlGame
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -258,7 +260,7 @@ fun LibraryScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "¡Listo en formato EPUB!",
+                                    text = if (book.isHtmlGame) "¡Juego HTML listo para jugar!" else "¡Listo en formato EPUB!",
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
@@ -274,7 +276,7 @@ fun LibraryScreen(
                                 onDismissBanner()
                                 onOpenBook(book)
                             }) {
-                                Text("Leer")
+                                Text(if (book.isHtmlGame) "Jugar" else "Leer")
                             }
                             IconButton(onClick = onDismissBanner) {
                                 Icon(Icons.Filled.Close, contentDescription = "Cerrar")
@@ -465,8 +467,8 @@ fun LibraryScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 SheetActionRow(
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
-                    label = "Leer en formato libro EPUB",
+                    icon = if (book.isHtmlGame) Icons.Filled.SportsEsports else Icons.AutoMirrored.Filled.MenuBook,
+                    label = if (book.isHtmlGame) "Jugar en pantalla completa (HTML)" else "Leer en formato libro EPUB",
                     onClick = {
                         selectedBookForMenu = null
                         onOpenBook(book)
@@ -474,7 +476,7 @@ fun LibraryScreen(
                 )
                 SheetActionRow(
                     icon = Icons.Filled.Share,
-                    label = "Compartir / Exportar archivo .epub (iPhone / Apple Books)",
+                    label = if (book.isHtmlGame) "Compartir / Exportar juego .html" else "Compartir / Exportar archivo .epub (iPhone / Apple Books)",
                     onClick = {
                         selectedBookForMenu = null
                         shareEpubFile(context, book)
@@ -612,7 +614,11 @@ private fun ContinueReadingHeroCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (book.progressPercent > 0) "${book.progressPercent}% leído" else "~${book.estimatedPages} págs. · ${book.totalChapters} cap.",
+                            text = when {
+                                book.isHtmlGame -> "Juego HTML5 · Pantalla completa"
+                                book.progressPercent > 0 -> "${book.progressPercent}% leído"
+                                else -> "~${book.estimatedPages} págs. · ${book.totalChapters} cap."
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -624,12 +630,12 @@ private fun ContinueReadingHeroCard(
                             )
                         ) {
                             Icon(
-                                Icons.Filled.AutoStories,
+                                if (book.isHtmlGame) Icons.Filled.SportsEsports else Icons.Filled.AutoStories,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Leer", style = MaterialTheme.typography.labelMedium)
+                            Text(if (book.isHtmlGame) "Jugar" else "Leer", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -817,7 +823,11 @@ private fun BookListItem(
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = if (book.isConvertedFromOtherFormat) "${book.originalFormat} → EPUB" else "EPUB",
+                            text = when {
+                                book.isHtmlGame -> "HTML"
+                                book.isConvertedFromOtherFormat -> "${book.originalFormat} → EPUB"
+                                else -> "EPUB"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)

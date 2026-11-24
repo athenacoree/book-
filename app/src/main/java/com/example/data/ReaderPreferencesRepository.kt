@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.engine.AppThemeMode
+import com.example.engine.HtmlOrientation
 import com.example.engine.LiveHighlightStyle
 import com.example.engine.LiveUnitMode
 import com.example.engine.PageTransitionStyle
@@ -44,7 +45,15 @@ data class ReaderPreferences(
     val liveAutoTurnPages: Boolean = true,
     val livePunctuationPause: Boolean = true,
     val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
-    val hasSeededLibrary: Boolean = false
+    val hasSeededLibrary: Boolean = false,
+    val htmlGameNotificationsEnabled: Boolean = true,
+    val htmlGameFullscreenImmersive: Boolean = true,
+    val htmlGameZoomPercent: Int = 100,
+    val hasSeededStarterGame: Boolean = false,
+    val htmlGameMuted: Boolean = false,
+    val htmlGameSafeSoftwareMode: Boolean = false,
+    val htmlGameOrientation: HtmlOrientation = HtmlOrientation.AUTO,
+    val htmlGameConfirmBackExit: Boolean = true
 )
 
 class ReaderPreferencesRepository(private val context: Context) {
@@ -71,6 +80,14 @@ class ReaderPreferencesRepository(private val context: Context) {
         val LIVE_PUNCT_PAUSE = booleanPreferencesKey("live_punctuation_pause")
         val APP_THEME = stringPreferencesKey("app_theme_mode")
         val SEEDED = booleanPreferencesKey("has_seeded_library")
+        val HTML_NOTIFICATIONS = booleanPreferencesKey("html_game_notifications_enabled")
+        val HTML_IMMERSIVE = booleanPreferencesKey("html_game_fullscreen_immersive")
+        val HTML_ZOOM = intPreferencesKey("html_game_zoom_percent")
+        val SEEDED_GAME = booleanPreferencesKey("has_seeded_starter_game")
+        val HTML_MUTED = booleanPreferencesKey("html_game_muted")
+        val HTML_SAFE_SOFTWARE = booleanPreferencesKey("html_game_safe_software_mode")
+        val HTML_ORIENTATION = stringPreferencesKey("html_game_orientation")
+        val HTML_CONFIRM_EXIT = booleanPreferencesKey("html_game_confirm_back_exit")
     }
 
     val preferences: Flow<ReaderPreferences> = context.readerDataStore.data.map { prefs ->
@@ -108,7 +125,17 @@ class ReaderPreferencesRepository(private val context: Context) {
             appThemeMode = prefs[Keys.APP_THEME]?.let {
                 runCatching { AppThemeMode.valueOf(it) }.getOrNull()
             } ?: AppThemeMode.SYSTEM,
-            hasSeededLibrary = prefs[Keys.SEEDED] ?: false
+            hasSeededLibrary = prefs[Keys.SEEDED] ?: false,
+            htmlGameNotificationsEnabled = prefs[Keys.HTML_NOTIFICATIONS] ?: true,
+            htmlGameFullscreenImmersive = prefs[Keys.HTML_IMMERSIVE] ?: true,
+            htmlGameZoomPercent = (prefs[Keys.HTML_ZOOM] ?: 100).coerceIn(75, 150),
+            hasSeededStarterGame = prefs[Keys.SEEDED_GAME] ?: false,
+            htmlGameMuted = prefs[Keys.HTML_MUTED] ?: false,
+            htmlGameSafeSoftwareMode = prefs[Keys.HTML_SAFE_SOFTWARE] ?: false,
+            htmlGameOrientation = prefs[Keys.HTML_ORIENTATION]?.let {
+                runCatching { HtmlOrientation.valueOf(it) }.getOrNull()
+            } ?: HtmlOrientation.AUTO,
+            htmlGameConfirmBackExit = prefs[Keys.HTML_CONFIRM_EXIT] ?: true
         )
     }
 
@@ -194,5 +221,37 @@ class ReaderPreferencesRepository(private val context: Context) {
 
     suspend fun markSeeded() {
         context.readerDataStore.edit { it[Keys.SEEDED] = true }
+    }
+
+    suspend fun setHtmlGameNotificationsEnabled(enabled: Boolean) {
+        context.readerDataStore.edit { it[Keys.HTML_NOTIFICATIONS] = enabled }
+    }
+
+    suspend fun setHtmlGameFullscreenImmersive(immersive: Boolean) {
+        context.readerDataStore.edit { it[Keys.HTML_IMMERSIVE] = immersive }
+    }
+
+    suspend fun setHtmlGameZoomPercent(percent: Int) {
+        context.readerDataStore.edit { it[Keys.HTML_ZOOM] = percent.coerceIn(75, 150) }
+    }
+
+    suspend fun markStarterGameSeeded() {
+        context.readerDataStore.edit { it[Keys.SEEDED_GAME] = true }
+    }
+
+    suspend fun setHtmlGameMuted(muted: Boolean) {
+        context.readerDataStore.edit { it[Keys.HTML_MUTED] = muted }
+    }
+
+    suspend fun setHtmlGameSafeSoftwareMode(safeMode: Boolean) {
+        context.readerDataStore.edit { it[Keys.HTML_SAFE_SOFTWARE] = safeMode }
+    }
+
+    suspend fun setHtmlGameOrientation(orientation: HtmlOrientation) {
+        context.readerDataStore.edit { it[Keys.HTML_ORIENTATION] = orientation.name }
+    }
+
+    suspend fun setHtmlGameConfirmBackExit(confirm: Boolean) {
+        context.readerDataStore.edit { it[Keys.HTML_CONFIRM_EXIT] = confirm }
     }
 }

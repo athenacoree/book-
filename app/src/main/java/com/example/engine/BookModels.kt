@@ -73,6 +73,12 @@ enum class AppThemeMode(val displayName: String) {
     DARK("Oscuro")
 }
 
+enum class HtmlOrientation(val displayName: String) {
+    AUTO("Automática"),
+    PORTRAIT("Vertical"),
+    LANDSCAPE("Horizontal")
+}
+
 sealed class ReaderBlock {
     data class Heading(val level: Int, val text: String) : ReaderBlock()
     data class Paragraph(val text: String) : ReaderBlock()

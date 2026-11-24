@@ -67,12 +67,16 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,6 +98,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -135,7 +140,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.BookmarkEntity
 import com.example.data.ReaderPreferences
+import com.example.data.isHtmlGame
 import com.example.engine.EpubChapter
+import com.example.engine.HtmlOrientation
 import com.example.engine.LiveHighlightStyle
 import com.example.engine.LiveUnitMode
 import com.example.engine.PageTransitionStyle
@@ -149,6 +156,8 @@ import com.example.ui.ReaderLoadState
 import com.example.ui.components.AmbientReaderParticles
 import com.example.ui.components.ChapterCompletionStampOverlay
 import com.example.ui.components.ElasticBookmarkRibbon
+import com.example.ui.components.HtmlConsoleEntry
+import com.example.ui.components.HtmlGameReaderView
 import com.example.ui.components.LongPressQuickMenuOverlay
 import com.example.ui.components.ReaderColors
 import com.example.ui.components.TocAndBookmarksSheetContent
@@ -226,10 +235,17 @@ fun ReaderScreen(
     onSetLiveHighlightStyle: (LiveHighlightStyle) -> Unit,
     onSetLiveAutoTurnPages: (Boolean) -> Unit,
     onSetLivePunctuationPause: (Boolean) -> Unit,
+    onSetHtmlGameNotificationsEnabled: (Boolean) -> Unit = {},
+    onSetHtmlGameFullscreenImmersive: (Boolean) -> Unit = {},
+    onSetHtmlGameZoomPercent: (Int) -> Unit = {},
+    onSetHtmlGameMuted: (Boolean) -> Unit = {},
+    onSetHtmlGameSafeSoftwareMode: (Boolean) -> Unit = {},
+    onSetHtmlGameOrientation: (HtmlOrientation) -> Unit = {},
+    onSetHtmlGameConfirmBackExit: (Boolean) -> Unit = {},
+    onSaveHtmlGameState: (String, String, String?) -> Unit = { _, _, _ -> },
+    onClearHtmlGameSaveData: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    BackHandler { onBack() }
-
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     var showControls by remember { mutableStateOf(false) }
@@ -243,6 +259,26 @@ fun ReaderScreen(
     var liveResetSignal by remember { mutableIntStateOf(0) }
     var totalPagesCurrentChapter by remember { mutableIntStateOf(1) }
     var showCompletionStamp by remember { mutableStateOf(false) }
+    var htmlReloadSignal by remember { mutableIntStateOf(0) }
+    var htmlTestNotificationSignal by remember { mutableIntStateOf(0) }
+    var showHtmlExitConfirm by remember { mutableStateOf(false) }
+    val htmlConsoleEntries = remember { mutableStateListOf<HtmlConsoleEntry>() }
+
+    val activeHtmlGame = (loadState as? ReaderLoadState.Ready)?.let {
+        it.book.isHtmlGame && !it.book.originalPath.isNullOrBlank()
+    } == true
+
+    BackHandler {
+        when {
+            showSettingsSheet -> showSettingsSheet = false
+            showTocSheet -> showTocSheet = false
+            showLongPressMenu -> showLongPressMenu = false
+            showControls -> showControls = false
+            showHtmlExitConfirm -> showHtmlExitConfirm = false
+            activeHtmlGame && preferences.htmlGameConfirmBackExit -> showHtmlExitConfirm = true
+            else -> onBack()
+        }
+    }
 
     val colors = resolveReaderColors(preferences.readerTheme)
 
@@ -309,6 +345,8 @@ fun ReaderScreen(
                 val epub = loadState.epub
                 val chapter = epub.chapters.getOrNull(currentChapterIndex) ?: epub.chapters.first()
                 val isFinalChapter = currentChapterIndex >= epub.chapters.lastIndex
+                val htmlGameFile = book.originalPath?.takeIf { book.isHtmlGame }?.let(::File)?.takeIf { it.exists() }
+                val isInteractiveHtml = htmlGameFile != null
 
                 fun triggerAddBookmark() {
                     val excerpt = currentPageExcerpt.ifBlank {
@@ -327,7 +365,35 @@ fun ReaderScreen(
                     bookmarkSavedToast = true
                 }
 
-                if (isPdfOriginalMode && book.originalPath != null && File(book.originalPath).exists()) {
+                if (htmlGameFile != null) {
+                    HtmlGameReaderView(
+                        htmlFile = htmlGameFile,
+                        bookTitle = book.title,
+                        savedGameJson = book.gameSaveJson,
+                        preferences = preferences,
+                        colors = colors,
+                        reloadSignal = htmlReloadSignal,
+                        testNotificationSignal = htmlTestNotificationSignal,
+                        showTopToolbar = showControls,
+                        isExternalOverlayOpen = showSettingsSheet || showTocSheet || showHtmlExitConfirm,
+                        onToggleControls = { showControls = !showControls },
+                        onOpenSettings = { tab ->
+                            initialSettingsTab = tab
+                            showSettingsSheet = true
+                        },
+                        onToggleMute = onSetHtmlGameMuted,
+                        onEnableSafeSoftwareMode = { onSetHtmlGameSafeSoftwareMode(true) },
+                        onSaveGameState = { saveJson, explicitRecord ->
+                            onSaveHtmlGameState(book.id, saveJson, explicitRecord)
+                        },
+                        onConsoleMessage = { entry ->
+                            if (htmlConsoleEntries.size >= 60) {
+                                htmlConsoleEntries.removeAt(0)
+                            }
+                            htmlConsoleEntries.add(entry)
+                        }
+                    )
+                } else if (isPdfOriginalMode && book.originalPath != null && File(book.originalPath).exists()) {
                     PdfOriginalReaderView(
                         pdfFile = File(book.originalPath),
                         colors = colors,
@@ -505,7 +571,7 @@ fun ReaderScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
-                                        text = chapter.title,
+                                        text = if (isInteractiveHtml) "Juego HTML · Pantalla completa" else chapter.title,
                                         style = MaterialTheme.typography.labelSmall,
                                         color = colors.mutedText,
                                         maxLines = 1,
@@ -513,7 +579,7 @@ fun ReaderScreen(
                                     )
                                 }
 
-                                if (book.originalPath != null && File(book.originalPath).exists()) {
+                                if (!book.isHtmlGame && book.originalPath != null && File(book.originalPath).exists()) {
                                     Surface(
                                         color = if (isPdfOriginalMode) colors.accent else colors.barBorder.copy(alpha = 0.5f),
                                         shape = RoundedCornerShape(10.dp),
@@ -631,85 +697,138 @@ fun ReaderScreen(
                                 .windowInsetsPadding(WindowInsets.navigationBars)
                                 .padding(horizontal = 18.dp, vertical = 12.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                TextButton(
-                                    onClick = {
-                                        if (currentChapterIndex > 0) {
-                                            onSelectChapter(currentChapterIndex - 1, 0)
-                                        }
-                                    },
-                                    enabled = currentChapterIndex > 0
+                            if (isInteractiveHtml) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
-                                    Text("Anterior")
-                                }
-
-                                Text(
-                                    text = "Capítulo ${currentChapterIndex + 1} de ${epub.chapters.size}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = colors.text
-                                )
-
-                                TextButton(
-                                    onClick = {
-                                        if (currentChapterIndex < epub.chapters.lastIndex) {
-                                            onSelectChapter(currentChapterIndex + 1, 0)
-                                        }
-                                    },
-                                    enabled = currentChapterIndex < epub.chapters.lastIndex
-                                ) {
-                                    Text("Siguiente")
-                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                                }
-                            }
-
-                            if (epub.chapters.size > 1) {
-                                Slider(
-                                    value = currentChapterIndex.toFloat(),
-                                    onValueChange = { idx ->
-                                        onSelectChapter(idx.roundToInt(), 0)
-                                    },
-                                    valueRange = 0f..epub.chapters.lastIndex.toFloat(),
-                                    steps = (epub.chapters.size - 2).coerceAtLeast(0),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = {
-                                        initialSettingsTab = 2
-                                        showSettingsSheet = true
+                                    TextButton(onClick = { htmlReloadSignal++ }) {
+                                        Icon(
+                                            Icons.Filled.Refresh,
+                                            contentDescription = null,
+                                            tint = colors.text,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Reiniciar", color = colors.text)
                                     }
+                                    TextButton(onClick = { htmlTestNotificationSignal++ }) {
+                                        Icon(
+                                            Icons.Filled.NotificationsActive,
+                                            contentDescription = null,
+                                            tint = colors.accent,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Probar aviso", color = colors.accent)
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            initialSettingsTab = 4
+                                            showSettingsSheet = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.SportsEsports,
+                                            contentDescription = null,
+                                            tint = colors.text,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Ajustes", color = colors.text)
+                                    }
+                                    TextButton(onClick = { shareEpubFile(context, book) }) {
+                                        Icon(
+                                            Icons.Filled.Share,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(".html")
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Icon(
-                                        Icons.Filled.GraphicEq,
-                                        contentDescription = null,
-                                        tint = if (preferences.liveEnabled) colors.accent else colors.mutedText,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    TextButton(
+                                        onClick = {
+                                            if (currentChapterIndex > 0) {
+                                                onSelectChapter(currentChapterIndex - 1, 0)
+                                            }
+                                        },
+                                        enabled = currentChapterIndex > 0
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
+                                        Text("Anterior")
+                                    }
+
                                     Text(
-                                        text = if (preferences.liveEnabled) "Modo Live activo" else "Modo Live",
-                                        color = if (preferences.liveEnabled) colors.accent else colors.mutedText
+                                        text = "Capítulo ${currentChapterIndex + 1} de ${epub.chapters.size}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colors.text
+                                    )
+
+                                    TextButton(
+                                        onClick = {
+                                            if (currentChapterIndex < epub.chapters.lastIndex) {
+                                                onSelectChapter(currentChapterIndex + 1, 0)
+                                            }
+                                        },
+                                        enabled = currentChapterIndex < epub.chapters.lastIndex
+                                    ) {
+                                        Text("Siguiente")
+                                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                                    }
+                                }
+
+                                if (epub.chapters.size > 1) {
+                                    Slider(
+                                        value = currentChapterIndex.toFloat(),
+                                        onValueChange = { idx ->
+                                            onSelectChapter(idx.roundToInt(), 0)
+                                        },
+                                        valueRange = 0f..epub.chapters.lastIndex.toFloat(),
+                                        steps = (epub.chapters.size - 2).coerceAtLeast(0),
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
-                                TextButton(onClick = { shareEpubFile(context, book) }) {
-                                    Icon(
-                                        Icons.Filled.Share,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Exportar .epub")
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(
+                                        onClick = {
+                                            initialSettingsTab = 2
+                                            showSettingsSheet = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.GraphicEq,
+                                            contentDescription = null,
+                                            tint = if (preferences.liveEnabled) colors.accent else colors.mutedText,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (preferences.liveEnabled) "Modo Live activo" else "Modo Live",
+                                            color = if (preferences.liveEnabled) colors.accent else colors.mutedText
+                                        )
+                                    }
+                                    TextButton(onClick = { shareEpubFile(context, book) }) {
+                                        Icon(
+                                            Icons.Filled.Share,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Exportar .epub")
+                                    }
                                 }
                             }
                         }
@@ -787,7 +906,28 @@ fun ReaderScreen(
                             onSetLiveHighlightStyle = onSetLiveHighlightStyle,
                             onSetLiveAutoTurnPages = onSetLiveAutoTurnPages,
                             onSetLivePunctuationPause = onSetLivePunctuationPause,
-                            onExportEpub = { shareEpubFile(context, book) }
+                            onExportEpub = { shareEpubFile(context, book) },
+                            isHtmlGame = isInteractiveHtml,
+                            onSetHtmlGameNotificationsEnabled = onSetHtmlGameNotificationsEnabled,
+                            onSetHtmlGameFullscreenImmersive = onSetHtmlGameFullscreenImmersive,
+                            onSetHtmlGameZoomPercent = onSetHtmlGameZoomPercent,
+                            onSetHtmlGameMuted = onSetHtmlGameMuted,
+                            onSetHtmlGameSafeSoftwareMode = onSetHtmlGameSafeSoftwareMode,
+                            onSetHtmlGameOrientation = onSetHtmlGameOrientation,
+                            onSetHtmlGameConfirmBackExit = onSetHtmlGameConfirmBackExit,
+                            htmlBestRecord = book.gameBestRecord,
+                            htmlHasSavedData = book.gameSaveJson.isNotBlank() && book.gameSaveJson != "{}",
+                            onClearHtmlSaveData = { onClearHtmlGameSaveData(book.id) },
+                            htmlConsoleEntries = htmlConsoleEntries,
+                            onClearHtmlConsole = { htmlConsoleEntries.clear() },
+                            onReloadHtmlGame = {
+                                showSettingsSheet = false
+                                htmlReloadSignal++
+                            },
+                            onTestHtmlNotification = {
+                                showSettingsSheet = false
+                                htmlTestNotificationSignal++
+                            }
                         )
                     }
                 }
@@ -810,6 +950,32 @@ fun ReaderScreen(
                             onDeleteBookmark = onDeleteBookmark
                         )
                     }
+                }
+
+                // Accidental Back-Exit Protection Dialog for HTML Games
+                if (showHtmlExitConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showHtmlExitConfirm = false },
+                        title = { Text("¿Salir del juego?") },
+                        text = {
+                            Text("Tu récord y progreso guardados permanecerán intactos en la biblioteca.")
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showHtmlExitConfirm = false
+                                    onBack()
+                                }
+                            ) {
+                                Text("Salir")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showHtmlExitConfirm = false }) {
+                                Text("Seguir jugando")
+                            }
+                        }
+                    )
                 }
             }
         }

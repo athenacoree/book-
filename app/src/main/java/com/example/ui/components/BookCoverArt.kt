@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import com.example.data.BookEntity
+import com.example.data.isHtmlGame
 import com.example.ui.theme.LoraFontFamily
 import java.io.File
 import kotlin.math.abs
@@ -192,7 +193,9 @@ fun BookCoverArt(
 }
 
 fun shareEpubFile(context: Context, book: BookEntity) {
-    val file = File(book.epubPath)
+    val htmlOriginal = book.originalPath?.takeIf { book.isHtmlGame && it.isNotBlank() && File(it).exists() }
+    val isHtml = htmlOriginal != null
+    val file = if (htmlOriginal != null) File(htmlOriginal) else File(book.epubPath)
     if (!file.exists()) return
     val uri = FileProvider.getUriForFile(
         context,
@@ -200,12 +203,14 @@ fun shareEpubFile(context: Context, book: BookEntity) {
         file
     )
     val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "application/epub+zip"
+        type = if (isHtml) "text/html" else "application/epub+zip"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_SUBJECT, "${book.title}.epub")
+        putExtra(Intent.EXTRA_SUBJECT, if (isHtml) "${book.title}.html" else "${book.title}.epub")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(intent, "Compartir libro EPUB"))
+    context.startActivity(
+        Intent.createChooser(intent, if (isHtml) "Compartir juego HTML" else "Compartir libro EPUB")
+    )
 }
 
 fun formatFileSize(bytes: Long): String {

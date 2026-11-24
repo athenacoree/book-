@@ -62,6 +62,17 @@ interface BookDao {
         totalImages: Int
     )
 
+    @Query(
+        "UPDATE books SET gameSaveJson = :saveJson, gameBestRecord = :bestRecord, " +
+            "lastReadTimestamp = :lastRead WHERE id = :bookId"
+    )
+    suspend fun updateGameSaveData(
+        bookId: String,
+        saveJson: String,
+        bestRecord: String,
+        lastRead: Long
+    )
+
     @Query("DELETE FROM books WHERE id = :bookId")
     suspend fun deleteBookById(bookId: String)
 

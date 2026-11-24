@@ -52,7 +52,10 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SportsEsports
+import com.example.data.isHtmlGame
 import com.example.engine.AppThemeMode
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -380,7 +383,7 @@ fun BookOpening3DOverlay(
                     }
             ) {
                 Surface(
-                    color = Color(0xFFFAF6F0),
+                    color = if (book.isHtmlGame) Color(0xFF171B26) else Color(0xFFFAF6F0),
                     shape = RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp, topStart = 4.dp, bottomStart = 4.dp),
                     shadowElevation = 14.dp,
                     modifier = Modifier.fillMaxSize()
@@ -392,17 +395,26 @@ fun BookOpening3DOverlay(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        if (book.isHtmlGame) {
+                            Icon(
+                                imageVector = Icons.Filled.SportsEsports,
+                                contentDescription = null,
+                                tint = Color(0xFFFBBF24),
+                                modifier = Modifier.size(34.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
                         Text(
                             text = book.title,
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFF1C1917),
+                            color = if (book.isHtmlGame) Color(0xFFFAF6F0) else Color(0xFF1C1917),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = book.author,
+                            text = if (book.isHtmlGame) "Juego HTML · Pantalla completa" else book.author,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF6B6258),
+                            color = if (book.isHtmlGame) Color(0xFFFDE68A) else Color(0xFF6B6258),
                             textAlign = TextAlign.Center
                         )
                     }
@@ -442,6 +454,35 @@ fun BookOpening3DOverlay(
                         .padding(top = 16.dp)
                         .graphicsLayer { alpha = promptAlpha }
                 ) {
+                    if (book.isHtmlGame) {
+                        Surface(
+                            color = Color(0xFFF59E0B).copy(alpha = 0.24f),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .padding(bottom = 10.dp)
+                                .border(1.dp, Color(0xFFFBBF24).copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SportsEsports,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFBBF24),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "JUEGO INTERACTIVO · HTML",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFDE68A)
+                                )
+                            }
+                        }
+                    }
+
                     Text(
                         text = book.title,
                         style = MaterialTheme.typography.titleLarge,
@@ -535,35 +576,65 @@ fun BookOpening3DOverlay(
 
                             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                            // Pages, Chapters, Reading Time, Word Count, Images
-                            val estReadMinutes = ((book.wordCount.coerceAtLeast(200)) / 200).coerceAtLeast(1)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                PreviewStatBadge(
-                                    label = "Páginas",
-                                    value = "~${book.estimatedPages.coerceAtLeast(1)}"
-                                )
-                                PreviewStatBadge(
-                                    label = "Capítulos",
-                                    value = "${book.totalChapters}"
-                                )
-                                PreviewStatBadge(
-                                    label = "Palabras",
-                                    value = formatCompactCount(book.wordCount)
-                                )
-                                PreviewStatBadge(
-                                    label = "Lectura",
-                                    value = "~${estReadMinutes}m"
-                                )
+                            if (book.isHtmlGame) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    PreviewStatBadge(
+                                        label = "Formato",
+                                        value = "HTML5"
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Récord",
+                                        value = book.gameBestRecord.ifBlank { "Sin récord" }
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Notif.",
+                                        value = "Activas"
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Tamaño",
+                                        value = formatFileSize(book.fileSizeBytes)
+                                    )
+                                }
+                            } else {
+                                // Pages, Chapters, Reading Time, Word Count, Images
+                                val estReadMinutes = ((book.wordCount.coerceAtLeast(200)) / 200).coerceAtLeast(1)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    PreviewStatBadge(
+                                        label = "Páginas",
+                                        value = "~${book.estimatedPages.coerceAtLeast(1)}"
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Capítulos",
+                                        value = "${book.totalChapters}"
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Palabras",
+                                        value = formatCompactCount(book.wordCount)
+                                    )
+                                    PreviewStatBadge(
+                                        label = "Lectura",
+                                        value = "~${estReadMinutes}m"
+                                    )
+                                }
                             }
 
+                            val hasSavedGameData = book.gameSaveJson.isNotBlank() && book.gameSaveJson != "{}"
                             val extraMeta = buildList {
-                                if (book.totalImages > 0) add("${book.totalImages} ilustraciones")
-                                if (book.publisher.isNotBlank()) add(book.publisher)
-                                if (book.publicationYear.isNotBlank()) add(book.publicationYear)
-                                add(formatFileSize(book.fileSizeBytes))
+                                if (book.isHtmlGame) {
+                                    add("Juego ejecutable HTML")
+                                    add(if (hasSavedGameData) "Partida guardada lista" else "Sin partida guardada")
+                                } else {
+                                    if (book.totalImages > 0) add("${book.totalImages} ilustraciones")
+                                    if (book.publisher.isNotBlank()) add(book.publisher)
+                                    if (book.publicationYear.isNotBlank()) add(book.publicationYear)
+                                    add(formatFileSize(book.fileSizeBytes))
+                                }
                             }
                             if (extraMeta.isNotEmpty()) {
                                 Row(
@@ -571,7 +642,11 @@ fun BookOpening3DOverlay(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (book.totalImages > 0) Icons.Filled.Image else Icons.Filled.Schedule,
+                                        imageVector = when {
+                                            book.isHtmlGame -> Icons.Filled.NotificationsActive
+                                            book.totalImages > 0 -> Icons.Filled.Image
+                                            else -> Icons.Filled.Schedule
+                                        },
                                         contentDescription = null,
                                         tint = Color(0xFFB8AFA3),
                                         modifier = Modifier.size(13.dp)
@@ -606,12 +681,18 @@ fun BookOpening3DOverlay(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            imageVector = if (book.isHtmlGame) Icons.Filled.SportsEsports else Icons.AutoMirrored.Filled.MenuBook,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(if (book.progressPercent > 0) "Continuar leyendo (${book.progressPercent}%)" else "Toca para abrir libro")
+                        Text(
+                            when {
+                                book.isHtmlGame -> "Toca para jugar"
+                                book.progressPercent > 0 -> "Continuar leyendo (${book.progressPercent}%)"
+                                else -> "Toca para abrir libro"
+                            }
+                        )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     OutlinedButton(
@@ -630,28 +711,41 @@ fun BookOpening3DOverlay(
 
     if (showGenreEditor) {
         var genreDraft by remember(book.id, localGenre) { mutableStateOf(localGenre) }
-        val presets = listOf(
-            "Novela clásica",
-            "Aventura",
-            "Fantasía",
-            "Ciencia ficción",
-            "Misterio",
-            "Romance",
-            "Historia",
-            "Filosofía y ensayo",
-            "Poesía",
-            "Ciencia y técnica",
-            "Terror"
-        )
+        val presets = if (book.isHtmlGame) {
+            listOf(
+                "Mini Juego HTML",
+                "Arcade",
+                "Puzzle",
+                "Aventura",
+                "Estrategia",
+                "Trivia",
+                "Simulación",
+                "RPG"
+            )
+        } else {
+            listOf(
+                "Novela clásica",
+                "Aventura",
+                "Fantasía",
+                "Ciencia ficción",
+                "Misterio",
+                "Romance",
+                "Historia",
+                "Filosofía y ensayo",
+                "Poesía",
+                "Ciencia y técnica",
+                "Terror"
+            )
+        }
         AlertDialog(
             onDismissRequest = { showGenreEditor = false },
-            title = { Text("Editar género del libro") },
+            title = { Text(if (book.isHtmlGame) "Editar categoría del juego" else "Editar género del libro") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = genreDraft,
                         onValueChange = { genreDraft = it },
-                        label = { Text("Género literario") },
+                        label = { Text(if (book.isHtmlGame) "Categoría o género" else "Género literario") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )

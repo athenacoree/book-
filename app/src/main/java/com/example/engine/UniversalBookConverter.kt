@@ -57,6 +57,7 @@ class UniversalBookConverter(private val context: Context) {
     private val epubDir = File(context.filesDir, "library_epubs").apply { mkdirs() }
     private val coverDir = File(context.filesDir, "book_covers").apply { mkdirs() }
     private val pdfOriginalDir = File(context.filesDir, "original_pdfs").apply { mkdirs() }
+    private val htmlDir = File(context.filesDir, "library_html").apply { mkdirs() }
 
     suspend fun importAndConvert(
         uri: Uri,
@@ -75,9 +76,13 @@ class UniversalBookConverter(private val context: Context) {
 
         val destEpub = File(epubDir, "$bookId.epub")
         var coverPath: String? = null
-        var originalPdfPath: String? = null
+        var originalAssetPath: String? = null
         var finalTitle = baseTitle
         var finalAuthor = "Autor desconocido"
+        var finalDescription = ""
+        var finalLanguageHint: String? = null
+        var finalGenreHint: String? = null
+        var htmlWordCount = 0
         var totalChapters = 1
 
         when (format) {
@@ -97,7 +102,7 @@ class UniversalBookConverter(private val context: Context) {
 
                 val tempPdf = File(pdfOriginalDir, "$bookId.pdf")
                 tempPdf.writeBytes(inputBytes)
-                originalPdfPath = tempPdf.absolutePath
+                originalAssetPath = tempPdf.absolutePath
 
                 // Render first page as cover image via native PdfRenderer
                 val coverBytes = renderPdfCoverBytes(tempPdf)
@@ -160,15 +165,49 @@ class UniversalBookConverter(private val context: Context) {
             }
 
             BookFormat.HTML -> {
-                onProgress(ConversionProgress(displayName, format, "Estructurando HTML a EPUB…", 0.5f))
-                val doc = Jsoup.parse(inputBytes.toString(Charsets.UTF_8))
-                finalTitle = doc.title().ifBlank { baseTitle }
+                onProgress(ConversionProgress(displayName, format, "Preparando HTML interactivo en pantalla completa…", 0.5f))
+                val htmlText = decodeTextSmart(inputBytes)
+                val htmlFile = File(htmlDir, "$bookId.html")
+                htmlFile.writeText(htmlText, Charsets.UTF_8)
+                originalAssetPath = htmlFile.absolutePath
+
+                val doc = Jsoup.parse(htmlText)
+                finalTitle = doc.title().ifBlank {
+                    doc.selectFirst("meta[property=og:title]")?.attr("content").orEmpty().ifBlank { baseTitle }
+                }
+                finalAuthor = doc.selectFirst("meta[name=author]")?.attr("content")
+                    ?.trim()?.takeIf { it.isNotEmpty() } ?: "Creador HTML"
+                finalDescription = doc.selectFirst("meta[name=description], meta[property=og:description]")
+                    ?.attr("content")?.trim().orEmpty()
+                    .ifBlank { "Mini juego o aplicación interactiva en HTML ejecutable a pantalla completa." }
+                finalGenreHint = doc.selectFirst("meta[name=genre], meta[name=category]")
+                    ?.attr("content")?.trim()?.takeIf { it.isNotEmpty() } ?: "Mini Juego HTML"
+
+                val declaredLang = doc.selectFirst("html")?.attr("lang")?.takeIf { it.isNotBlank() }
+                val visibleText = doc.body().text()
+                val pseudoChapter = listOf(
+                    EpubChapter(
+                        index = 0,
+                        title = finalTitle,
+                        blocks = listOf(ReaderBlock.Paragraph(visibleText))
+                    )
+                )
+                finalLanguageHint = BookMetadataDetector.detectLanguage(declaredLang, pseudoChapter)
+                htmlWordCount = visibleText.split(Regex("\\s+")).count { it.isNotBlank() }.coerceAtLeast(1)
+
+                val embeddedCover = extractDataUriImageBytes(
+                    doc.selectFirst("meta[name=cover], meta[property=og:image]")?.attr("content")
+                        ?: doc.selectFirst("link[rel*=icon]")?.attr("href")
+                )
+                coverPath = saveCoverBytes(bookId, embeddedCover)
+
                 val chapters = extractHtmlChapters(doc.body().html(), finalTitle)
                 totalChapters = chapters.size
                 EpubWriter.writeEpub(
                     outputFile = destEpub,
                     title = finalTitle,
                     author = finalAuthor,
+                    language = declaredLang ?: "es",
                     chapters = chapters
                 )
             }
@@ -188,7 +227,20 @@ class UniversalBookConverter(private val context: Context) {
         }
 
         val finalParsed = runCatching { EpubParser.parse(destEpub) }.getOrNull()
-        onProgress(ConversionProgress(displayName, format, "¡Libro listo en formato EPUB!", 1.0f))
+        onProgress(
+            ConversionProgress(
+                displayName,
+                format,
+                if (format == BookFormat.HTML) "¡Juego HTML interactivo listo!" else "¡Libro listo en formato EPUB!",
+                1.0f
+            )
+        )
+
+        val resolvedFileSize = if (format == BookFormat.HTML && originalAssetPath != null) {
+            File(originalAssetPath).length().coerceAtLeast(destEpub.length())
+        } else {
+            destEpub.length()
+        }
 
         ConvertedBookResult(
             id = bookId,
@@ -196,17 +248,17 @@ class UniversalBookConverter(private val context: Context) {
             author = finalAuthor,
             originalFormat = format,
             epubPath = destEpub.absolutePath,
-            originalPath = originalPdfPath,
+            originalPath = originalAssetPath,
             coverPath = coverPath,
             totalChapters = finalParsed?.chapters?.size ?: totalChapters,
-            fileSizeBytes = destEpub.length(),
-            isConvertedFromOtherFormat = format != BookFormat.EPUB,
-            language = finalParsed?.language ?: "Español",
-            genre = finalParsed?.genre ?: "Lectura general",
+            fileSizeBytes = resolvedFileSize,
+            isConvertedFromOtherFormat = format != BookFormat.EPUB && format != BookFormat.HTML,
+            language = finalLanguageHint ?: finalParsed?.language ?: "Español",
+            genre = finalGenreHint ?: finalParsed?.genre ?: "Lectura general",
             publisher = finalParsed?.publisher.orEmpty(),
             publicationYear = finalParsed?.publicationYear.orEmpty(),
-            description = finalParsed?.description.orEmpty(),
-            wordCount = finalParsed?.wordCount ?: 0,
+            description = finalDescription.ifBlank { finalParsed?.description.orEmpty() },
+            wordCount = if (format == BookFormat.HTML) htmlWordCount else (finalParsed?.wordCount ?: 0),
             estimatedPages = finalParsed?.estimatedPages ?: 1,
             totalImages = finalParsed?.totalImages ?: 0
         )
@@ -374,6 +426,311 @@ class UniversalBookConverter(private val context: Context) {
                 estimatedPages = (parsedFabulas?.estimatedPages ?: 2).coerceAtLeast(2),
                 totalImages = parsedFabulas?.totalImages ?: 0
             )
+        )
+    }
+
+    fun seedStarterHtmlGame(): ConvertedBookResult {
+        val gameId = "starter-game-orb"
+        val htmlFile = File(htmlDir, "$gameId.html")
+        val epubFile = File(epubDir, "$gameId.epub")
+        val gameHtml = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="author" content="Lumina Arcade" />
+  <meta name="genre" content="Mini Juego · Arcade" />
+  <meta name="description" content="Mini juego HTML5 interactivo en pantalla completa: atrapa orbes dorados, esquiva meteoritos y desbloquea notificaciones de récord." />
+  <title>Órbita Dorada · Mini Juego</title>
+  <style>
+    :root {
+      --lumina-bg: #0e111a;
+      --lumina-ink: #f8fafc;
+      --lumina-accent: #f59e0b;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at 50% 25%, #1f2538 0%, var(--lumina-bg) 75%);
+      color: var(--lumina-ink);
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .hud {
+      position: fixed; top: 14px; left: 16px; right: 76px;
+      display: flex; gap: 10px; align-items: center; pointer-events: none; z-index: 10;
+    }
+    .pill {
+      background: rgba(15, 23, 42, 0.86); border: 1px solid rgba(255,255,255,0.16);
+      padding: 7px 12px; border-radius: 999px;
+      font-size: 13px; font-weight: 700; color: #f8fafc;
+    }
+    .overlay {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(10, 12, 18, 0.84); z-index: 20; padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 340px; background: rgba(24, 28, 42, 0.98);
+      border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 24px;
+      padding: 24px; text-align: center; box-shadow: 0 18px 48px rgba(0,0,0,0.45);
+    }
+    h1 { margin: 0 0 8px; font-size: 22px; color: #fef3c7; }
+    p { margin: 0 0 18px; font-size: 14px; line-height: 1.45; color: #cbd5e1; }
+    button {
+      width: 100%; border: 0; border-radius: 16px; padding: 14px 18px;
+      background: linear-gradient(135deg, #f59e0b, #d97706); color: #111827;
+      font-size: 15px; font-weight: 800; cursor: pointer; margin-bottom: 10px;
+    }
+    .ghost {
+      background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15);
+      font-weight: 600; margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="pill" id="scorePill">Puntos: 0</div>
+    <div class="pill" id="bestPill">Récord: 0</div>
+    <div class="pill" id="livesPill">♥♥♥</div>
+  </div>
+  <canvas id="game"></canvas>
+  <div class="overlay" id="menuOverlay">
+    <div class="card">
+      <h1>Órbita Dorada</h1>
+      <p id="menuMsg">Desliza el dedo para mover tu núcleo luminoso. Atrapa los orbes dorados y esquiva los fragmentos oscuros.</p>
+      <button id="playBtn">Jugar ahora</button>
+      <button class="ghost" id="notifyBtn">Probar notificación</button>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scorePill = document.getElementById('scorePill');
+    const bestPill = document.getElementById('bestPill');
+    const livesPill = document.getElementById('livesPill');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const menuMsg = document.getElementById('menuMsg');
+    const playBtn = document.getElementById('playBtn');
+    const notifyBtn = document.getElementById('notifyBtn');
+
+    let w = 0, h = 0, dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      w = window.innerWidth; h = window.innerHeight;
+      canvas.width = Math.max(1, Math.floor(w * dpr));
+      canvas.height = Math.max(1, Math.floor(h * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let best = Number(localStorage.getItem('lumina_orb_best') || '0');
+    bestPill.textContent = 'Récord: ' + best;
+
+    let running = false, score = 0, lives = 3, combo = 1, lastSpawn = 0;
+    const player = { x: w / 2, y: h * 0.78, tx: w / 2, ty: h * 0.78, r: 20 };
+    const items = [];
+    const sparks = [];
+    const stars = Array.from({ length: 36 }, () => ({
+      x: Math.random(), y: Math.random(), r: 0.8 + Math.random() * 1.8, s: 0.2 + Math.random() * 0.6
+    }));
+
+    let sharedAudioCtx = null;
+    function chime(freq, dur) {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+        if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+        const osc = sharedAudioCtx.createOscillator();
+        const gain = sharedAudioCtx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.08, sharedAudioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, sharedAudioCtx.currentTime + dur);
+        osc.connect(gain); gain.connect(sharedAudioCtx.destination);
+        osc.start(); osc.stop(sharedAudioCtx.currentTime + dur);
+      } catch (_) {}
+    }
+
+    function sendNotify(title, body) {
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body: body });
+        } else {
+          Notification.requestPermission().then(function(p) {
+            if (p === 'granted') new Notification(title, { body: body });
+          });
+        }
+      }
+    }
+
+    notifyBtn.addEventListener('click', function() {
+      sendNotify('Órbita Dorada', '¡Las notificaciones del mini juego HTML funcionan perfectamente!');
+    });
+
+    function startGame() {
+      score = 0; lives = 3; combo = 1; items.length = 0; sparks.length = 0;
+      player.x = w / 2; player.y = h * 0.78; player.tx = player.x; player.ty = player.y;
+      scorePill.textContent = 'Puntos: 0';
+      livesPill.textContent = '♥♥♥';
+      menuOverlay.style.display = 'none';
+      running = true;
+      chime(520, 0.14);
+    }
+    playBtn.addEventListener('click', startGame);
+
+    function moveTarget(clientX, clientY) {
+      player.tx = Math.max(24, Math.min(w - 24, clientX));
+      player.ty = Math.max(70, Math.min(h - 24, clientY));
+    }
+    canvas.addEventListener('pointerdown', e => moveTarget(e.clientX, e.clientY));
+    canvas.addEventListener('pointermove', e => { if (e.buttons || e.pointerType === 'touch') moveTarget(e.clientX, e.clientY); });
+
+    function burst(x, y, color) {
+      for (let i = 0; i < 12; i++) {
+        const a = (Math.PI * 2 * i) / 12;
+        const sp = 1.5 + Math.random() * 3.5;
+        sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+      }
+    }
+
+    function loop(ts) {
+      ctx.clearRect(0, 0, w, h);
+      stars.forEach(st => {
+        st.y = (st.y + st.s * 0.002) % 1;
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.beginPath(); ctx.arc(st.x * w, st.y * h, st.r, 0, Math.PI * 2); ctx.fill();
+      });
+
+      if (running) {
+        player.x += (player.tx - player.x) * 0.24;
+        player.y += (player.ty - player.y) * 0.24;
+
+        const spawnEvery = Math.max(280, 680 - score * 2.5);
+        if (ts - lastSpawn > spawnEvery) {
+          lastSpawn = ts;
+          const bad = Math.random() < Math.min(0.45, 0.22 + score / 280);
+          items.push({
+            x: 28 + Math.random() * (w - 56), y: -24,
+            vy: (bad ? 3.2 : 2.6) + Math.min(5.5, score / 45),
+            r: bad ? 17 : 14, bad
+          });
+        }
+
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          it.y += it.vy;
+          const dx = it.x - player.x, dy = it.y - player.y;
+          if (dx * dx + dy * dy < (it.r + player.r) * (it.r + player.r)) {
+            items.splice(i, 1);
+            if (it.bad) {
+              lives--; combo = 1;
+              livesPill.textContent = '♥'.repeat(Math.max(0, lives)) || '0';
+              burst(it.x, it.y, '#ef4444');
+              chime(180, 0.22);
+              if (navigator.vibrate) navigator.vibrate(70);
+              if (lives <= 0) {
+                running = false;
+                if (score > best) {
+                  best = score;
+                  localStorage.setItem('lumina_orb_best', String(best));
+                  bestPill.textContent = 'Récord: ' + best;
+                  sendNotify('¡Nuevo Récord en Órbita Dorada!', 'Alcanzaste ' + best + ' puntos.');
+                }
+                menuMsg.textContent = 'Partida terminada · Puntuación: ' + score + ' · Récord: ' + best;
+                playBtn.textContent = 'Jugar otra vez';
+                menuOverlay.style.display = 'flex';
+              }
+            } else {
+              score += 10 * combo;
+              combo = Math.min(5, combo + 1);
+              scorePill.textContent = 'Puntos: ' + score;
+              burst(it.x, it.y, '#fbbf24');
+              chime(560 + combo * 65, 0.1);
+              if (score > 0 && score % 150 === 0) {
+                sendNotify('¡Nivel superado!', 'Llevas ' + score + ' puntos sin parar.');
+              }
+            }
+            continue;
+          }
+          if (it.y > h + 30) items.splice(i, 1);
+        }
+      }
+
+      items.forEach(it => {
+        ctx.beginPath();
+        ctx.arc(it.x, it.y, it.r + 5, 0, Math.PI * 2);
+        ctx.fillStyle = it.bad ? 'rgba(239, 68, 68, 0.22)' : 'rgba(251, 191, 36, 0.22)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(it.x, it.y, it.r, 0, Math.PI * 2);
+        ctx.fillStyle = it.bad ? '#ef4444' : '#fbbf24';
+        ctx.fill();
+      });
+
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const sp = sparks[i];
+        sp.x += sp.vx; sp.y += sp.vy; sp.life -= 0.04;
+        if (sp.life <= 0) { sparks.splice(i, 1); continue; }
+        ctx.globalAlpha = sp.life;
+        ctx.fillStyle = sp.color;
+        ctx.beginPath(); ctx.arc(sp.x, sp.y, 3.2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Player core with lightweight soft halo
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r + 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+      ctx.fillStyle = '#fef3c7';
+      ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#f59e0b'; ctx.stroke();
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
+        """.trimIndent()
+
+        htmlFile.writeText(gameHtml, Charsets.UTF_8)
+        EpubWriter.writeEpub(
+            outputFile = epubFile,
+            title = "Órbita Dorada · Mini Juego",
+            author = "Lumina Arcade",
+            language = "es",
+            chapters = listOf(
+                ChapterInput(
+                    title = "Juego HTML Interactivo",
+                    paragraphs = listOf("Este título es un mini juego HTML5 ejecutable a pantalla completa dentro de la aplicación.")
+                )
+            )
+        )
+
+        return ConvertedBookResult(
+            id = gameId,
+            title = "Órbita Dorada",
+            author = "Lumina Arcade",
+            originalFormat = BookFormat.HTML,
+            epubPath = epubFile.absolutePath,
+            originalPath = htmlFile.absolutePath,
+            coverPath = null,
+            totalChapters = 1,
+            fileSizeBytes = htmlFile.length(),
+            isConvertedFromOtherFormat = false,
+            language = "Español",
+            genre = "Mini Juego · Arcade",
+            publisher = "Lumina Arcade",
+            publicationYear = "2026",
+            description = "Mini juego HTML interactivo en pantalla completa: desliza para atrapar orbes dorados, rompe tu récord y recibe notificaciones.",
+            wordCount = 32,
+            estimatedPages = 1,
+            totalImages = 0
         )
     }
 
@@ -597,6 +954,17 @@ class UniversalBookConverter(private val context: Context) {
         } else {
             utf8
         }
+    }
+
+    private fun extractDataUriImageBytes(uriString: String?): ByteArray? {
+        if (uriString.isNullOrBlank() || !uriString.startsWith("data:image/", ignoreCase = true)) {
+            return null
+        }
+        val base64Part = uriString.substringAfter("base64,", "")
+        if (base64Part.isBlank()) return null
+        return runCatching {
+            android.util.Base64.decode(base64Part, android.util.Base64.DEFAULT)
+        }.getOrNull()
     }
 
     private fun saveCoverBytes(bookId: String, bytes: ByteArray?): String? {

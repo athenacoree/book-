@@ -360,7 +360,16 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                             onSetLiveScaleFactor = readerViewModel::setLiveScaleFactor,
                             onSetLiveHighlightStyle = readerViewModel::setLiveHighlightStyle,
                             onSetLiveAutoTurnPages = readerViewModel::setLiveAutoTurnPages,
-                            onSetLivePunctuationPause = readerViewModel::setLivePunctuationPause
+                            onSetLivePunctuationPause = readerViewModel::setLivePunctuationPause,
+                            onSetHtmlGameNotificationsEnabled = readerViewModel::setHtmlGameNotificationsEnabled,
+                            onSetHtmlGameFullscreenImmersive = readerViewModel::setHtmlGameFullscreenImmersive,
+                            onSetHtmlGameZoomPercent = readerViewModel::setHtmlGameZoomPercent,
+                            onSetHtmlGameMuted = readerViewModel::setHtmlGameMuted,
+                            onSetHtmlGameSafeSoftwareMode = readerViewModel::setHtmlGameSafeSoftwareMode,
+                            onSetHtmlGameOrientation = readerViewModel::setHtmlGameOrientation,
+                            onSetHtmlGameConfirmBackExit = readerViewModel::setHtmlGameConfirmBackExit,
+                            onSaveHtmlGameState = readerViewModel::saveHtmlGameState,
+                            onClearHtmlGameSaveData = readerViewModel::clearHtmlGameSaveData
                         )
                     }
                 }

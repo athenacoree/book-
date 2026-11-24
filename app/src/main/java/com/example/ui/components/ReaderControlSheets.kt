@@ -34,17 +34,28 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FormatAlignJustify
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
@@ -68,6 +79,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.BookmarkEntity
 import com.example.data.ReaderPreferences
+import com.example.engine.HtmlOrientation
 import com.example.engine.LiveHighlightStyle
 import com.example.engine.LiveUnitMode
 import com.example.engine.PageTransitionStyle
@@ -498,7 +511,7 @@ fun LongPressQuickMenuOverlay(
 }
 
 /**
- * Unified 4-tab Reading Center Sheet (Apariencia • Páginas 3D • Modo Live • Efectos).
+ * Unified Reading & HTML Game Center Sheet (Apariencia • Páginas 3D • Modo Live • Efectos [• Juego HTML]).
  */
 @Composable
 fun UnifiedReaderSettingsSheet(
@@ -526,9 +539,28 @@ fun UnifiedReaderSettingsSheet(
     onSetLiveHighlightStyle: (LiveHighlightStyle) -> Unit,
     onSetLiveAutoTurnPages: (Boolean) -> Unit,
     onSetLivePunctuationPause: (Boolean) -> Unit,
-    onExportEpub: () -> Unit
+    onExportEpub: () -> Unit,
+    isHtmlGame: Boolean = false,
+    onSetHtmlGameNotificationsEnabled: (Boolean) -> Unit = {},
+    onSetHtmlGameFullscreenImmersive: (Boolean) -> Unit = {},
+    onSetHtmlGameZoomPercent: (Int) -> Unit = {},
+    onSetHtmlGameMuted: (Boolean) -> Unit = {},
+    onSetHtmlGameSafeSoftwareMode: (Boolean) -> Unit = {},
+    onSetHtmlGameOrientation: (HtmlOrientation) -> Unit = {},
+    onSetHtmlGameConfirmBackExit: (Boolean) -> Unit = {},
+    htmlBestRecord: String = "",
+    htmlHasSavedData: Boolean = false,
+    onClearHtmlSaveData: () -> Unit = {},
+    htmlConsoleEntries: List<HtmlConsoleEntry> = emptyList(),
+    onClearHtmlConsole: () -> Unit = {},
+    onReloadHtmlGame: () -> Unit = {},
+    onTestHtmlNotification: () -> Unit = {}
 ) {
-    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 3)) }
+    val maxTabIndex = if (isHtmlGame) 4 else 3
+    var selectedTab by remember(initialTab, isHtmlGame) {
+        mutableIntStateOf(initialTab.coerceIn(0, maxTabIndex))
+    }
+    var showConsoleExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -536,7 +568,7 @@ fun UnifiedReaderSettingsSheet(
             .padding(bottom = 24.dp)
     ) {
         Text(
-            text = "Centro de lectura",
+            text = if (isHtmlGame) "Centro de juego y lectura" else "Centro de lectura",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
         )
@@ -549,6 +581,13 @@ fun UnifiedReaderSettingsSheet(
             Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Páginas 3D") })
             Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }, text = { Text("Modo Live") })
             Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }, text = { Text("Efectos") })
+            if (isHtmlGame) {
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    text = { Text("Juego HTML") }
+                )
+            }
         }
 
         Column(
@@ -1252,7 +1291,419 @@ fun UnifiedReaderSettingsSheet(
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Compartir / Exportar libro .epub")
+                        Text(if (isHtmlGame) "Compartir / Exportar juego .html" else "Compartir / Exportar libro .epub")
+                    }
+                }
+
+                4 -> {
+                    // Interactive HTML Game, Immersion, Persistent Save & Diagnostics Tab
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.NotificationsActive,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column {
+                                    Text("Notificaciones del juego", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        text = "Avisos en pantalla y notificaciones del sistema",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Switch(
+                                checked = preferences.htmlGameNotificationsEnabled,
+                                onCheckedChange = onSetHtmlGameNotificationsEnabled,
+                                modifier = Modifier.testTag("html_notifications_switch")
+                            )
+                        }
+                    }
+
+                    // Mute audio + Real Immersive Fullscreen + Safe Software Mode + Back Guard
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (preferences.htmlGameMuted) {
+                                            Icons.AutoMirrored.Filled.VolumeOff
+                                        } else {
+                                            Icons.AutoMirrored.Filled.VolumeUp
+                                        },
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Silenciar audio del juego", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            text = "Silencia WebAudio y sonidos sin bajar el volumen global",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = preferences.htmlGameMuted,
+                                    onCheckedChange = onSetHtmlGameMuted,
+                                    modifier = Modifier.testTag("html_mute_switch")
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Fullscreen,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Pantalla inmersiva real", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            text = "Oculta las barras del sistema al jugar",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = preferences.htmlGameFullscreenImmersive,
+                                    onCheckedChange = onSetHtmlGameFullscreenImmersive
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Security,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Modo Seguro (Software)", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            text = "Evita cierres gráficos en juegos con efectos pesados",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = preferences.htmlGameSafeSoftwareMode,
+                                    onCheckedChange = onSetHtmlGameSafeSoftwareMode,
+                                    modifier = Modifier.testTag("html_safe_mode_switch")
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Lock,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Confirmar al salir", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            text = "Protege contra toques accidentales en el botón Atrás",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = preferences.htmlGameConfirmBackExit,
+                                    onCheckedChange = onSetHtmlGameConfirmBackExit
+                                )
+                            }
+                        }
+                    }
+
+                    // Screen Orientation Selector
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Filled.ScreenRotation,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text("Orientación del juego", style = MaterialTheme.typography.labelMedium)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            HtmlOrientation.entries.forEach { orient ->
+                                val selected = preferences.htmlGameOrientation == orient
+                                Surface(
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onSetHtmlGameOrientation(orient) }
+                                        .testTag("html_orient_${orient.name.lowercase()}")
+                                ) {
+                                    Text(
+                                        text = orient.displayName,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        textAlign = TextAlign.Center,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                        modifier = Modifier.padding(vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Zoom Slider
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Escala / Zoom HTML", style = MaterialTheme.typography.labelMedium)
+                            Text(
+                                text = "${preferences.htmlGameZoomPercent}%",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Slider(
+                            value = preferences.htmlGameZoomPercent.toFloat(),
+                            onValueChange = { onSetHtmlGameZoomPercent(it.roundToInt()) },
+                            valueRange = 75f..150f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Persistent Save Record Card
+                    Surface(
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.EmojiEvents,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Column {
+                                    Text(
+                                        text = if (htmlBestRecord.isNotBlank()) {
+                                            "Récord guardado: $htmlBestRecord"
+                                        } else {
+                                            "Guardado permanente activo"
+                                        },
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = if (htmlHasSavedData) {
+                                            "Los récords y datos locales están respaldados"
+                                        } else {
+                                            "Aún no hay partidas guardadas"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (htmlHasSavedData) {
+                                TextButton(onClick = onClearHtmlSaveData) {
+                                    Text("Borrar", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+
+                    // JS Console / Error Diagnostics Viewer
+                    val errorCount = htmlConsoleEntries.count { it.level == "ERROR" || it.level == "CRASH" }
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showConsoleExpanded = !showConsoleExpanded },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.BugReport,
+                                        contentDescription = null,
+                                        tint = if (errorCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                    )
+                                    Column {
+                                        Text("Consola / Errores JS", style = MaterialTheme.typography.titleSmall)
+                                        Text(
+                                            text = if (htmlConsoleEntries.isEmpty()) {
+                                                "Sin incidencias detectadas"
+                                            } else {
+                                                "${htmlConsoleEntries.size} mensajes ($errorCount errores)"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                if (htmlConsoleEntries.isNotEmpty()) {
+                                    TextButton(onClick = onClearHtmlConsole) {
+                                        Text("Limpiar")
+                                    }
+                                }
+                            }
+
+                            if (showConsoleExpanded) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                if (htmlConsoleEntries.isEmpty()) {
+                                    Text(
+                                        text = "No se registraron mensajes ni errores de JavaScript en esta sesión.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 150.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        htmlConsoleEntries.asReversed().forEach { entry ->
+                                            val levelColor = when (entry.level) {
+                                                "ERROR", "CRASH" -> MaterialTheme.colorScheme.error
+                                                "WARN" -> Color(0xFFD97706)
+                                                else -> MaterialTheme.colorScheme.primary
+                                            }
+                                            Text(
+                                                text = "[${entry.level}${if (entry.line > 0) ":L${entry.line}" else ""}] ${entry.message}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = levelColor
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onTestHtmlNotification,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Probar aviso", style = MaterialTheme.typography.labelMedium)
+                        }
+                        OutlinedButton(
+                            onClick = onReloadHtmlGame,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Reiniciar", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onExportEpub,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.SportsEsports, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Compartir / Exportar archivo .html")
                     }
                 }
             }

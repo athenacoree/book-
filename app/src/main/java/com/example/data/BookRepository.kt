@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 
 class BookRepository(context: Context) {
@@ -33,6 +34,22 @@ class BookRepository(context: Context) {
             preferencesRepository.markSeeded()
         } else if (!prefs.hasSeededLibrary) {
             preferencesRepository.markSeeded()
+        }
+    }
+
+    suspend fun ensureStarterGameSeeded() = withContext(Dispatchers.IO) {
+        val prefs = preferencesRepository.preferences.first()
+        val existing = dao.getBookById("starter-game-orb")
+        val existingFile = existing?.originalPath?.let(::File)
+        val needsRefresh = existing != null && (
+            existingFile == null ||
+                !existingFile.exists() ||
+                runCatching { existingFile.readText(Charsets.UTF_8).contains("backdrop-filter") }.getOrDefault(false)
+            )
+        if (!prefs.hasSeededStarterGame || existing == null || needsRefresh) {
+            val starterGame = converter.seedStarterHtmlGame()
+            dao.insertBook(starterGame.toEntity())
+            preferencesRepository.markStarterGameSeeded()
         }
     }
 
@@ -77,7 +94,61 @@ class BookRepository(context: Context) {
         dao.updateGenre(bookId, cleaned)
     }
 
+    suspend fun saveHtmlGameState(
+        bookId: String,
+        rawSaveJson: String,
+        explicitRecord: String? = null
+    ): Pair<String, String> = withContext(Dispatchers.IO) {
+        val validJson = runCatching { JSONObject(rawSaveJson).toString() }.getOrElse { "{}" }
+        val existing = dao.getBookById(bookId)
+        val derivedRecord = explicitRecord?.trim()?.takeIf { it.isNotEmpty() }
+            ?: extractBestRecordFromJson(validJson).ifBlank { existing?.gameBestRecord.orEmpty() }
+        dao.updateGameSaveData(
+            bookId = bookId,
+            saveJson = validJson,
+            bestRecord = derivedRecord.take(40),
+            lastRead = System.currentTimeMillis()
+        )
+        validJson to derivedRecord.take(40)
+    }
+
+    suspend fun clearHtmlGameSaveData(bookId: String) = withContext(Dispatchers.IO) {
+        dao.updateGameSaveData(
+            bookId = bookId,
+            saveJson = "{}",
+            bestRecord = "",
+            lastRead = System.currentTimeMillis()
+        )
+    }
+
+    private fun extractBestRecordFromJson(jsonStr: String): String {
+        val obj = runCatching { JSONObject(jsonStr) }.getOrNull() ?: return ""
+        val keys = obj.keys().asSequence().toList()
+        val priorityMatchers = listOf(
+            "best", "record", "high_score", "highscore", "maxscore", "récord", "pts", "score", "puntos"
+        )
+        for (matcher in priorityMatchers) {
+            val matchKey = keys.firstOrNull { it.lowercase().contains(matcher) } ?: continue
+            val value = obj.optString(matchKey, "").trim()
+            if (value.isNotEmpty() && value != "0" && value != "null") {
+                return if (value.all { it.isDigit() }) "$value pts" else value.take(28)
+            }
+        }
+        val levelKey = keys.firstOrNull {
+            val lower = it.lowercase()
+            lower.contains("level") || lower.contains("nivel") || lower.contains("stage")
+        }
+        if (levelKey != null) {
+            val value = obj.optString(levelKey, "").trim()
+            if (value.isNotEmpty() && value != "null") {
+                return if (value.all { it.isDigit() }) "Nivel $value" else value.take(28)
+            }
+        }
+        return ""
+    }
+
     suspend fun syncBookMetadataIfNeeded(book: BookEntity, parsed: ParsedEpub) = withContext(Dispatchers.IO) {
+        if (book.isHtmlGame) return@withContext
         if (book.wordCount == 0 && parsed.wordCount > 0) {
             dao.updateBookMetadata(
                 bookId = book.id,

@@ -119,6 +119,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     init {
         viewModelScope.launch {
             repository.ensureStarterBooksSeeded()
+            repository.ensureStarterGameSeeded()
             val currentBooks = repository.allBooks.first()
             currentBooks.filter { it.wordCount == 0 }.forEach { book ->
                 runCatching {
