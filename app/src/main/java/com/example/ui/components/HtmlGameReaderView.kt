@@ -124,6 +124,7 @@ import com.example.engine.ReaderTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 import kotlin.math.roundToInt
@@ -571,8 +572,18 @@ fun HtmlGameReaderView(
                                 val url = request?.url ?: return null
                                 if (url.scheme == "https" && url.host == "luminabook.local") {
                                     val relPath = url.path?.trimStart('/').orEmpty()
+                                    // The virtual origin is not a real website. If a game navigates
+                                    // back to its root URL, serve the already-loaded game HTML
+                                    // instead of letting WebView try DNS for luminabook.local.
+                                    if (relPath.isBlank()) {
+                                        return WebResourceResponse(
+                                            "text/html",
+                                            "UTF-8",
+                                            ByteArrayInputStream(preparedHtml.toByteArray(Charsets.UTF_8))
+                                        )
+                                    }
                                     val parentDir = htmlFile.parentFile
-                                    if (relPath.isNotEmpty() && parentDir != null) {
+                                    if (parentDir != null) {
                                         val target = File(parentDir, relPath).canonicalFile
                                         if (target.path.startsWith(parentDir.canonicalPath) && target.isFile) {
                                             val mime = guessMimeType(target.name)
