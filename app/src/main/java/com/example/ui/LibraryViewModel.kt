@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.BookEntity
 import com.example.data.BookRepository
+import com.example.data.isHtmlGame
 import com.example.engine.AppThemeMode
 import com.example.engine.ConversionProgress
 import kotlinx.coroutines.CancellationException
