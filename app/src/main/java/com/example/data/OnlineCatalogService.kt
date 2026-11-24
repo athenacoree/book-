@@ -5,6 +5,8 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
+import com.example.BuildConfig
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -20,7 +22,9 @@ import okhttp3.Request
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Query
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 @JsonClass(generateAdapter = true)
@@ -44,8 +48,8 @@ data class GutendexBook(
             ?.split(",")
             ?.reversed()
             ?.joinToString(" ") { it.trim() }
-            ?.ifBlank { "Dominio público" }
-            ?: "Dominio público"
+            ?.ifBlank { "Autor desconocido" }
+            ?: "Autor desconocido"
 
     val epubDownloadUrl: String?
         get() = formats["application/epub+zip"]
@@ -60,20 +64,45 @@ data class GutendexAuthor(
     val name: String = ""
 )
 
-interface GutendexApi {
-    @GET("books/")
-    suspend fun searchBooks(
-        @Query("search") search: String? = null,
-        @Query("languages") languages: String? = null,
-        @Query("topic") topic: String? = null,
-        @Query("mime_type") mimeType: String = "application/epub"
-    ): GutendexResponse
+@JsonClass(generateAdapter = true)
+data class SupabaseCatalogItem(
+    val id: Long,
+    val slug: String,
+    val title: String,
+    val author: String = "",
+    val description: String = "",
+    @Json(name = "item_type") val itemType: String,
+    @Json(name = "file_format") val fileFormat: String,
+    @Json(name = "storage_path") val storagePath: String,
+    @Json(name = "cover_path") val coverPath: String? = null,
+    @Json(name = "language_code") val languageCode: String? = null,
+    val subjects: List<String> = emptyList(),
+    @Json(name = "file_size_bytes") val fileSizeBytes: Long = 0L,
+    @Json(name = "download_count") val downloadCount: Long = 0L
+)
+
+private interface SupabaseCatalogApi {
+    @GET("rest/v1/luminabook_catalog_items")
+    suspend fun fetchPublishedBooks(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") authorization: String,
+        @Query("select") select: String = "id,slug,title,author,description,item_type,file_format,storage_path,cover_path,language_code,subjects,file_size_bytes,download_count",
+        @Query("is_published") published: String = "eq.true",
+        @Query("item_type") itemType: String = "eq.book",
+        @Query("file_format") fileFormat: String = "eq.epub",
+        @Query("title") title: String? = null,
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 50
+    ): List<SupabaseCatalogItem>
 }
 
 class OnlineCatalogService {
+    private val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/"
+    private val apiKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY.trim()
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(3, TimeUnit.MINUTES)
         .followRedirects(true)
         .build()
 
@@ -81,31 +110,92 @@ class OnlineCatalogService {
         .addLast(KotlinJsonAdapterFactory())
         .build()
 
-    private val api: GutendexApi = Retrofit.Builder()
-        .baseUrl("https://gutendex.com/")
-        .client(client)
-        .addConverterFactory(MoshiConverterFactory.create(moshi))
-        .build()
-        .create(GutendexApi::class.java)
+    private val api: SupabaseCatalogApi by lazy {
+        requireConfiguration()
+        Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(client)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SupabaseCatalogApi::class.java)
+    }
 
     suspend fun fetchBooks(
         query: String?,
         languageCode: String?,
         topic: String?
     ): List<GutendexBook> = withContext(Dispatchers.IO) {
-        val response = api.searchBooks(
-            search = query?.takeIf { it.isNotBlank() },
-            languages = languageCode?.takeIf { it.isNotBlank() },
-            topic = topic?.takeIf { it.isNotBlank() }
+        requireConfiguration()
+        val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
+        val items = api.fetchPublishedBooks(
+            apiKey = apiKey,
+            authorization = "Bearer $apiKey",
+            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ")}*" }
         )
-        response.results.filter { it.epubDownloadUrl != null }
+        items.asSequence()
+            .filter { languageCode.isNullOrBlank() || it.languageCode.equals(languageCode, ignoreCase = true) }
+            .filter { topic.isNullOrBlank() || it.subjects.any { subject -> subject.contains(topic, ignoreCase = true) } }
+            .map { item ->
+                val fileUrl = publicStorageUrl(item.storagePath)
+                val formats = buildMap {
+                    put("application/epub+zip", fileUrl)
+                    item.coverPath?.takeIf { it.isNotBlank() }?.let {
+                        put("image/jpeg", publicStorageUrl(it))
+                    }
+                }
+                GutendexBook(
+                    id = item.id.toInt(),
+                    title = item.title,
+                    authors = listOf(GutendexAuthor(item.author)),
+                    subjects = item.subjects,
+                    languages = listOfNotNull(item.languageCode),
+                    downloadCount = item.downloadCount.coerceIn(0, Int.MAX_VALUE.toLong()).toInt(),
+                    formats = formats
+                )
+            }
+            .toList()
     }
 
     suspend fun downloadBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url(url).build()
-        client.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) throw IllegalStateException("Error HTTP ${resp.code}")
-            resp.body?.bytes() ?: throw IllegalStateException("Respuesta vacía")
+        val req = Request.Builder().url(url).get().build()
+        client.newCall(req).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Error HTTP ${response.code}")
+            val body = response.body ?: throw IllegalStateException("Respuesta vacía")
+            val maxBytes = 200L * 1024L * 1024L
+            if (body.contentLength() > maxBytes) {
+                throw IllegalStateException("El archivo supera el límite de descarga de 200 MiB")
+            }
+            val output = ByteArrayOutputStream()
+            body.byteStream().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var total = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > maxBytes) {
+                        throw IllegalStateException("El archivo supera el límite de descarga de 200 MiB")
+                    }
+                    output.write(buffer, 0, read)
+                }
+            }
+            output.toByteArray()
+        }
+    }
+
+    private fun publicStorageUrl(path: String): String {
+        val encodedPath = path.split("/")
+            .filter { it.isNotBlank() }
+            .joinToString("/") { Uri.encode(it) }
+        require(encodedPath.isNotBlank() && !path.startsWith("/") && !path.split("/").any { it == ".." }) {
+            "Ruta de almacenamiento no válida"
+        }
+        return "${baseUrl}storage/v1/object/public/luminabook-assets/$encodedPath"
+    }
+
+    private fun requireConfiguration() {
+        require(BuildConfig.SUPABASE_URL.isNotBlank() && apiKey.isNotBlank()) {
+            "Falta configurar SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY en .env"
         }
     }
 }
