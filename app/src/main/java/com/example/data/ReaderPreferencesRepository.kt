@@ -45,11 +45,9 @@ data class ReaderPreferences(
     val liveAutoTurnPages: Boolean = true,
     val livePunctuationPause: Boolean = true,
     val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
-    val hasSeededLibrary: Boolean = false,
     val htmlGameNotificationsEnabled: Boolean = true,
     val htmlGameFullscreenImmersive: Boolean = true,
     val htmlGameZoomPercent: Int = 100,
-    val hasSeededStarterGame: Boolean = false,
     val htmlGameMuted: Boolean = false,
     val htmlGameSafeSoftwareMode: Boolean = false,
     val htmlGameOrientation: HtmlOrientation = HtmlOrientation.AUTO,
@@ -79,11 +77,9 @@ class ReaderPreferencesRepository(private val context: Context) {
         val LIVE_AUTO_TURN = booleanPreferencesKey("live_auto_turn_pages")
         val LIVE_PUNCT_PAUSE = booleanPreferencesKey("live_punctuation_pause")
         val APP_THEME = stringPreferencesKey("app_theme_mode")
-        val SEEDED = booleanPreferencesKey("has_seeded_library")
         val HTML_NOTIFICATIONS = booleanPreferencesKey("html_game_notifications_enabled")
         val HTML_IMMERSIVE = booleanPreferencesKey("html_game_fullscreen_immersive")
         val HTML_ZOOM = intPreferencesKey("html_game_zoom_percent")
-        val SEEDED_GAME = booleanPreferencesKey("has_seeded_starter_game")
         val HTML_MUTED = booleanPreferencesKey("html_game_muted")
         val HTML_SAFE_SOFTWARE = booleanPreferencesKey("html_game_safe_software_mode")
         val HTML_ORIENTATION = stringPreferencesKey("html_game_orientation")
@@ -125,11 +121,9 @@ class ReaderPreferencesRepository(private val context: Context) {
             appThemeMode = prefs[Keys.APP_THEME]?.let {
                 runCatching { AppThemeMode.valueOf(it) }.getOrNull()
             } ?: AppThemeMode.SYSTEM,
-            hasSeededLibrary = prefs[Keys.SEEDED] ?: false,
             htmlGameNotificationsEnabled = prefs[Keys.HTML_NOTIFICATIONS] ?: true,
             htmlGameFullscreenImmersive = prefs[Keys.HTML_IMMERSIVE] ?: true,
             htmlGameZoomPercent = (prefs[Keys.HTML_ZOOM] ?: 100).coerceIn(75, 150),
-            hasSeededStarterGame = prefs[Keys.SEEDED_GAME] ?: false,
             htmlGameMuted = prefs[Keys.HTML_MUTED] ?: false,
             htmlGameSafeSoftwareMode = prefs[Keys.HTML_SAFE_SOFTWARE] ?: false,
             htmlGameOrientation = prefs[Keys.HTML_ORIENTATION]?.let {
@@ -219,10 +213,6 @@ class ReaderPreferencesRepository(private val context: Context) {
         context.readerDataStore.edit { it[Keys.APP_THEME] = mode.name }
     }
 
-    suspend fun markSeeded() {
-        context.readerDataStore.edit { it[Keys.SEEDED] = true }
-    }
-
     suspend fun setHtmlGameNotificationsEnabled(enabled: Boolean) {
         context.readerDataStore.edit { it[Keys.HTML_NOTIFICATIONS] = enabled }
     }
@@ -233,10 +223,6 @@ class ReaderPreferencesRepository(private val context: Context) {
 
     suspend fun setHtmlGameZoomPercent(percent: Int) {
         context.readerDataStore.edit { it[Keys.HTML_ZOOM] = percent.coerceIn(75, 150) }
-    }
-
-    suspend fun markStarterGameSeeded() {
-        context.readerDataStore.edit { it[Keys.SEEDED_GAME] = true }
     }
 
     suspend fun setHtmlGameMuted(muted: Boolean) {
