@@ -71,8 +71,9 @@ class UniversalBookConverter(private val context: Context) {
 
         onProgress(ConversionProgress(displayName, format, "Leyendo archivo ${format.label}…", 0.15f))
 
-        val inputBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalStateException("No se pudo abrir el archivo seleccionado")
+        val stagedInput = File(context.cacheDir, "luminabook-import-$bookId.tmp")
+        copyUriToFile(uri, stagedInput)
+        val inputBytes by lazy(LazyThreadSafetyMode.NONE) { stagedInput.readBytes() }
 
         val destEpub = File(epubDir, "$bookId.epub")
         var coverPath: String? = null
@@ -88,7 +89,7 @@ class UniversalBookConverter(private val context: Context) {
         when (format) {
             BookFormat.EPUB -> {
                 onProgress(ConversionProgress(displayName, format, "Validando estructura EPUB…", 0.55f))
-                destEpub.writeBytes(inputBytes)
+                stagedInput.copyTo(destEpub, overwrite = true)
                 val parsed = EpubParser.parse(destEpub)
                 finalTitle = parsed.title.ifBlank { baseTitle }
                 finalAuthor = parsed.author
@@ -101,7 +102,7 @@ class UniversalBookConverter(private val context: Context) {
                 PDFBoxResourceLoader.init(context.applicationContext)
 
                 val tempPdf = File(pdfOriginalDir, "$bookId.pdf")
-                tempPdf.writeBytes(inputBytes)
+                stagedInput.copyTo(tempPdf, overwrite = true)
                 originalAssetPath = tempPdf.absolutePath
 
                 // Render first page as cover image via native PdfRenderer
@@ -242,6 +243,7 @@ class UniversalBookConverter(private val context: Context) {
             destEpub.length()
         }
 
+        stagedInput.delete()
         ConvertedBookResult(
             id = bookId,
             title = finalTitle,
@@ -604,6 +606,27 @@ class UniversalBookConverter(private val context: Context) {
         val file = File(coverDir, "$bookId.jpg")
         FileOutputStream(file).use { it.write(bytes) }
         return file.absolutePath
+    }
+
+    private fun copyUriToFile(uri: Uri, target: File) {
+        val maxBytes = 200L * 1024L * 1024L
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalStateException("No se pudo abrir el archivo seleccionado")
+        input.use { source ->
+            FileOutputStream(target).use { output ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = source.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > maxBytes) {
+                        throw IllegalArgumentException("El archivo supera el límite de importación de 200 MiB")
+                    }
+                    output.write(buffer, 0, read)
+                }
+            }
+        }
     }
 
     private fun resolveDisplayName(uri: Uri): String? {
