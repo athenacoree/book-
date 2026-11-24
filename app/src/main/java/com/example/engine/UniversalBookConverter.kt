@@ -18,6 +18,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.io.ByteArrayInputStream
+import java.util.zip.ZipInputStream
 
 data class ConversionProgress(
     val fileName: String,
@@ -360,6 +362,128 @@ class UniversalBookConverter(private val context: Context) {
             description = "Juego HTML5 descargado del catálogo LuminaBook.",
             estimatedPages = 1
         )
+    }
+
+
+    suspend fun saveDownloadedGamePackage(
+        bookId: String,
+        title: String,
+        author: String,
+        packageBytes: ByteArray,
+        fileFormat: String,
+        entryFile: String = "index.html",
+        language: String? = null,
+        subjects: List<String> = emptyList()
+    ): ConvertedBookResult = withContext(Dispatchers.IO) {
+        require(packageBytes.isNotEmpty()) { "El paquete del juego está vacío" }
+        require(packageBytes.size <= 64 * 1024 * 1024) { "El paquete supera el límite de 64 MiB" }
+        val safeId = bookId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+            .take(80).ifBlank { UUID.randomUUID().toString() }
+        val safeEntry = entryFile.replace('\\\\', '/').trimStart('/')
+        require(safeEntry.isNotBlank() && safeEntry.split('/').none { it == ".." || it.isBlank() }) {
+            "La ruta de entrada del juego no es válida"
+        }
+        val gameRoot = File(htmlDir, "$safeId.assets")
+        val staging = File(htmlDir, "$safeId.assets.tmp")
+        staging.deleteRecursively()
+        staging.mkdirs()
+        var extractedBytes = 0L
+        var fileCount = 0
+        try {
+            when (fileFormat.lowercase()) {
+                "html" -> {
+                    val html = decodeTextSmart(packageBytes)
+                    require(html.contains("<html", true) || html.contains("<body", true)) {
+                        "El archivo descargado no parece HTML válido"
+                    }
+                    File(staging, "index.html").writeText(html, Charsets.UTF_8)
+                }
+                "zip" -> {
+                    ZipInputStream(ByteArrayInputStream(packageBytes)).use { zip ->
+                        while (true) {
+                            val entry = zip.nextEntry ?: break
+                            val name = entry.name.replace('\\\\', '/')
+                            require(!name.startsWith("/") && !name.contains(":") &&
+                                name.split('/').none { it == ".." || it.isBlank() }) {
+                                "El ZIP contiene una ruta no permitida"
+                            }
+                            if (!entry.isDirectory) {
+                                fileCount++
+                                require(fileCount <= 1200) { "El paquete contiene demasiados archivos" }
+                                val target = File(staging, name).canonicalFile
+                                require(target.path.startsWith(staging.canonicalPath + File.separator)) {
+                                    "El ZIP intenta salir de la carpeta del juego"
+                                }
+                                target.parentFile?.mkdirs()
+                                target.outputStream().use { output ->
+                                    val buffer = ByteArray(16 * 1024)
+                                    while (true) {
+                                        val count = zip.read(buffer)
+                                        if (count < 0) break
+                                        extractedBytes += count
+                                        require(extractedBytes <= 160L * 1024L * 1024L) {
+                                            "El juego descomprimido supera 160 MiB"
+                                        }
+                                        output.write(buffer, 0, count)
+                                    }
+                                }
+                            }
+                            zip.closeEntry()
+                        }
+                    }
+                    require(fileCount > 0) { "El ZIP no contiene archivos" }
+                }
+                else -> throw IllegalArgumentException("Formato de juego no compatible: $fileFormat")
+            }
+            val entry = if (fileFormat.equals("html", true)) File(staging, "index.html") else File(staging, safeEntry)
+            require(entry.isFile && entry.length() > 0) {
+                "No se encontró el archivo de inicio '$safeEntry' dentro del paquete"
+            }
+            if (entry.name != "index.html" || entry.parentFile != staging) {
+                File(staging, "index.html").writeBytes(entry.readBytes())
+            }
+            val htmlText = File(staging, "index.html").readText(Charsets.UTF_8)
+            require(htmlText.contains("<html", true) || htmlText.contains("<body", true)) {
+                "El archivo de inicio no es HTML válido"
+            }
+            val finalEntry = File(staging, "index.html")
+            val destEpub = File(epubDir, "$safeId.epub")
+            EpubWriter.writeEpub(
+                outputFile = destEpub,
+                title = title,
+                author = author.ifBlank { "Creador GITBOOK" },
+                language = language ?: "es",
+                chapters = listOf(ChapterInput(
+                    title = title,
+                    paragraphs = listOf("Juego instalado en GITBOOK. Los recursos del paquete se conservan localmente.")
+                ))
+            )
+            gameRoot.deleteRecursively()
+            if (!staging.renameTo(gameRoot)) {
+                staging.copyRecursively(gameRoot, overwrite = true)
+                staging.deleteRecursively()
+            }
+            val htmlFile = File(gameRoot, "index.html")
+            ConvertedBookResult(
+                id = safeId,
+                title = title,
+                author = author.ifBlank { "Creador GITBOOK" },
+                originalFormat = BookFormat.HTML,
+                epubPath = destEpub.absolutePath,
+                originalPath = htmlFile.absolutePath,
+                coverPath = null,
+                totalChapters = 1,
+                fileSizeBytes = gameRoot.walkTopDown().filter { it.isFile }.sumOf { it.length() },
+                isConvertedFromOtherFormat = false,
+                language = BookMetadataDetector.mapLanguageCode(language),
+                genre = BookMetadataDetector.resolveGenre(subjects, title, emptyList()),
+                description = "Juego GITBOOK con paquete local de recursos.",
+                estimatedPages = 1
+            )
+        } catch (error: Exception) {
+            staging.deleteRecursively()
+            throw error
+        }
     }
 
     fun deleteBookFiles(epubPath: String, originalPath: String?, coverPath: String?) {
