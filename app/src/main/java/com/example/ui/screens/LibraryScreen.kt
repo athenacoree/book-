@@ -264,17 +264,6 @@ fun LibraryScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    uiState.continueReadingBook?.let { featured ->
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            ContinueReadingHeroCard(
-                                book = featured,
-                                sensorTiltX = sensorTiltX,
-                                sensorTiltY = sensorTiltY,
-                                onOpen = { openingBookId = featured.id }
-                            )
-                        }
-                    }
-
                     items(displayBooks, key = { it.id }) { book ->
                         BookGridItem(
                             book = book,
