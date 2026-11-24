@@ -234,7 +234,7 @@ fun DiscoverScreen(
                 FilterChip(
                     selected = uiState.selectedCatalogSection == "games",
                     onClick = { onCatalogSectionSelected("games") },
-                    label = { Text("Juegos HTML5") }
+                    label = { Text("GITBOOK PLAY") }
                 )
             }
         }
@@ -614,71 +614,55 @@ private fun OnlineCatalogGameRow(
     onOpen: () -> Unit
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                0.75.dp,
-                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                RoundedCornerShape(18.dp)
-            )
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth().border(0.75.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = game.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (game.description.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = game.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 104.dp, height = 126.dp).clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center) {
+                if (!game.coverPath.isNullOrBlank()) {
+                    AsyncImage(model = game.coverPath, contentDescription = "Portada de ${game.title}",
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🎮", style = MaterialTheme.typography.headlineLarge)
+                        Text("GITBOOK", style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Text("PLAY", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Black)
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "HTML5 · ${game.languageCode?.uppercase() ?: "Juego"} · ${game.downloadCount} descargas",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
-            Spacer(Modifier.width(10.dp))
-            if (isDownloaded) {
-                OutlinedButton(
-                    onClick = onOpen,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Jugar", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(game.title, style = MaterialTheme.typography.titleSmall, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis)
+                if (game.description.isNotBlank()) {
+                    Spacer(Modifier.height(5.dp))
+                    Text(game.description, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3,
+                        overflow = TextOverflow.Ellipsis)
                 }
-            } else {
-                Button(
-                    onClick = onDownload,
-                    enabled = !isDownloading,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Descargar", style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.height(7.dp))
+                Text("${game.fileFormat.uppercase()} · ${game.languageCode?.uppercase() ?: "Juego"} · ${game.downloadCount} descargas",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                if (isDownloaded) {
+                    OutlinedButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)) {
+                        Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp)); Text("Jugar")
+                    }
+                } else {
+                    Button(onClick = onDownload, enabled = !isDownloading,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)) {
+                        if (isDownloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary)
+                        else Icon(Icons.Filled.Download, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp)); Text(if (isDownloading) "Preparando" else "Instalar")
                     }
                 }
             }
