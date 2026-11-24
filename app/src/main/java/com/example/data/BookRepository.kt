@@ -9,7 +9,6 @@ import com.example.engine.ParsedEpub
 import com.example.engine.UniversalBookConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -25,33 +24,6 @@ class BookRepository(context: Context) {
 
     val allBooks: Flow<List<BookEntity>> = dao.observeAllBooks()
     val convertedBooks: Flow<List<BookEntity>> = dao.observeConvertedBooks()
-
-    suspend fun ensureStarterBooksSeeded() = withContext(Dispatchers.IO) {
-        val prefs = preferencesRepository.preferences.first()
-        if (!prefs.hasSeededLibrary && dao.getBookCount() == 0) {
-            val seeded = converter.seedStarterBooks()
-            dao.insertBooks(seeded.map { it.toEntity() })
-            preferencesRepository.markSeeded()
-        } else if (!prefs.hasSeededLibrary) {
-            preferencesRepository.markSeeded()
-        }
-    }
-
-    suspend fun ensureStarterGameSeeded() = withContext(Dispatchers.IO) {
-        val prefs = preferencesRepository.preferences.first()
-        val existing = dao.getBookById("starter-game-orb")
-        val existingFile = existing?.originalPath?.let(::File)
-        val needsRefresh = existing != null && (
-            existingFile == null ||
-                !existingFile.exists() ||
-                runCatching { existingFile.readText(Charsets.UTF_8).contains("backdrop-filter") }.getOrDefault(false)
-            )
-        if (!prefs.hasSeededStarterGame || existing == null || needsRefresh) {
-            val starterGame = converter.seedStarterHtmlGame()
-            dao.insertBook(starterGame.toEntity())
-            preferencesRepository.markStarterGameSeeded()
-        }
-    }
 
     suspend fun importAndConvertBook(
         uri: Uri,
@@ -200,6 +172,33 @@ class BookRepository(context: Context) {
         topic: String?
     ): List<GutendexBook> {
         return onlineCatalog.fetchBooks(query, languageCode, topic)
+    }
+
+    suspend fun searchOnlineGames(query: String? = null): List<SupabaseCatalogItem> {
+        return onlineCatalog.fetchGames(query).filter {
+            it.fileFormat.equals("html", ignoreCase = true)
+        }
+    }
+
+    suspend fun downloadOnlineGame(item: SupabaseCatalogItem): BookEntity = withContext(Dispatchers.IO) {
+        require(item.itemType.equals("game", ignoreCase = true)) {
+            "El elemento seleccionado no es un juego"
+        }
+        require(item.fileFormat.equals("html", ignoreCase = true)) {
+            "Este formato de juego todavía no es compatible con la descarga directa"
+        }
+        val bytes = onlineCatalog.downloadCatalogAsset(item.storagePath)
+        val result = converter.saveDownloadedHtmlGame(
+            bookId = "lbg-${item.id}",
+            title = item.title,
+            author = item.author,
+            htmlBytes = bytes,
+            language = item.languageCode,
+            subjects = item.subjects
+        )
+        val entity = result.toEntity()
+        dao.insertBook(entity)
+        entity
     }
 
     suspend fun downloadOnlineBook(book: GutendexBook): BookEntity {

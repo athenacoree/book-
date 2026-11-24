@@ -15,7 +15,6 @@ import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.RenderProcessGoneDetail
-import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -130,6 +129,20 @@ import java.io.FileInputStream
 import kotlin.math.roundToInt
 
 private const val VIRTUAL_ORIGIN = "https://luminabook.local/"
+private fun hardenGameHtml(rawHtml: String): String {
+    val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
+    val headPattern = Regex("(?i)<head(?:\\s[^>]*)?>")
+    if (headPattern.containsMatchIn(rawHtml)) {
+        return headPattern.replaceFirst(rawHtml) { it.value + policy }
+    }
+    val htmlPattern = Regex("(?i)<html(?:\\s[^>]*)?>")
+    return if (htmlPattern.containsMatchIn(rawHtml)) {
+        htmlPattern.replaceFirst(rawHtml) { it.value + "<head>$policy</head>" }
+    } else {
+        "<!doctype html><html><head>$policy</head><body>$rawHtml</body></html>"
+    }
+}
+
 
 data class HtmlInAppNotification(
     val id: Long,
@@ -376,7 +389,7 @@ fun HtmlGameReaderView(
         val permitted = GameNotificationHelper.hasNotificationPermission(context) &&
             preferences.htmlGameNotificationsEnabled
         injectLuminaGameBridge(
-            rawHtml = raw,
+            rawHtml = hardenGameHtml(raw),
             initiallyGranted = permitted,
             initiallyMuted = preferences.htmlGameMuted,
             initiallyPaused = effectivePaused
@@ -500,7 +513,10 @@ fun HtmlGameReaderView(
                             loadWithOverviewMode = true
                             builtInZoomControls = false
                             displayZoomControls = false
-                            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                safeBrowsingEnabled = true
+                            }
                             textZoom = latestPrefs.htmlGameZoomPercent
                         }
                         isVerticalScrollBarEnabled = false
@@ -561,11 +577,11 @@ fun HtmlGameReaderView(
                                 view: WebView?,
                                 request: WebResourceRequest?
                             ): Boolean {
-                                val uri: Uri = request?.url ?: return false
-                                return !(URLUtil.isHttpsUrl(uri.toString()) ||
-                                    URLUtil.isHttpUrl(uri.toString()) ||
-                                    uri.scheme == "data" ||
-                                    uri.scheme == "blob")
+                                val uri: Uri = request?.url ?: return true
+                                if (request.isForMainFrame) {
+                                    return !(uri.scheme == "https" && uri.host == "luminabook.local")
+                                }
+                                return uri.scheme !in setOf("https", "http", "data", "blob")
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
