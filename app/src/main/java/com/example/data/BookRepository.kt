@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.engine.ConversionProgress
 import com.example.engine.ConvertedBookResult
 import com.example.engine.EpubParser
@@ -177,6 +178,31 @@ class BookRepository(context: Context) {
     suspend fun searchOnlineGames(query: String? = null): List<SupabaseCatalogItem> {
         return onlineCatalog.fetchGames(query).filter {
             it.fileFormat.equals("html", ignoreCase = true)
+        }
+    }
+
+    suspend fun downloadCatalogBook(item: SupabaseCatalogItem): BookEntity = withContext(Dispatchers.IO) {
+        require(item.itemType.equals("book", ignoreCase = true)) { "El elemento seleccionado no es un libro" }
+        val extension = item.fileFormat.lowercase()
+        require(extension in setOf("epub", "pdf", "mobi", "fb2", "txt", "html")) {
+            "Formato de libro no compatible: $extension"
+        }
+        val bytes = onlineCatalog.downloadCatalogAsset(item.storagePath)
+        val downloadDir = File(appContext.cacheDir, "catalog_downloads").apply { mkdirs() }
+        val downloadedFile = File(downloadDir, "${item.id}.$extension")
+        try {
+            downloadedFile.writeBytes(bytes)
+            val uri = FileProvider.getUriForFile(
+                appContext,
+                "${appContext.packageName}.fileprovider",
+                downloadedFile
+            )
+            val converted = converter.importAndConvert(uri)
+            val entity = converted.toEntity()
+            dao.insertBook(entity)
+            entity
+        } finally {
+            downloadedFile.delete()
         }
     }
 
