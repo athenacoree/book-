@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import retrofit2.Retrofit
@@ -175,9 +176,26 @@ class OnlineCatalogService {
             itemType = "eq.game",
             title = catalogTitleFilter(normalizedQuery)
         ).map { item ->
-            item.copy(
+            var resolved = item.copy(
                 coverPath = item.coverPath?.takeIf { it.isNotBlank() }?.let { publicStorageUrl(it) }
             )
+            val manifestPath = item.updateManifestPath?.takeIf { it.isNotBlank() }
+            if (manifestPath != null) {
+                resolved = runCatching {
+                    val manifest = JSONObject(downloadCatalogAsset(manifestPath).toString(Charsets.UTF_8))
+                    val remoteVersion = manifest.optString("version").takeIf { it.isNotBlank() } ?: item.gameVersion
+                    val remoteFile = manifest.optString("file").takeIf { it.isNotBlank() } ?: item.storagePath
+                    item.copy(
+                        coverPath = resolved.coverPath,
+                        gameVersion = remoteVersion,
+                        storagePath = remoteFile,
+                        releaseNotes = manifest.optString("notes", item.releaseNotes),
+                        sha256 = manifest.optString("sha256").takeIf { it.isNotBlank() } ?: item.sha256,
+                        packageEntry = manifest.optString("package_entry", item.packageEntry)
+                    )
+                }.getOrDefault(resolved)
+            }
+            resolved
         }
     }
 
