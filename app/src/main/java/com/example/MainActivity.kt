@@ -301,9 +301,16 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                             onDownloadBook = { book ->
                                 discoverViewModel.downloadBook(book)
                             },
+                            onDownloadGame = { game ->
+                                discoverViewModel.downloadGame(game)
+                            },
                             onOpenDownloadedBook = { libraryId ->
                                 navController.navigate(Routes.reader(libraryId))
                             },
+                            onOpenDownloadedGame = { libraryId ->
+                                navController.navigate(Routes.reader(libraryId))
+                            },
+                            onCatalogSectionSelected = discoverViewModel::setCatalogSection,
                             onGoToOfflineLibrary = {
                                 navController.navigate(Routes.LIBRARY) {
                                     popUpTo(Routes.LIBRARY) { inclusive = true }
