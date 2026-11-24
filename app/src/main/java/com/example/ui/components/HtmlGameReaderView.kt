@@ -15,7 +15,6 @@ import android.webkit.JavascriptInterface
 import android.webkit.JsPromptResult
 import android.webkit.JsResult
 import android.webkit.RenderProcessGoneDetail
-import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -131,12 +130,16 @@ import kotlin.math.roundToInt
 
 private const val VIRTUAL_ORIGIN = "https://luminabook.local/"
 private fun hardenGameHtml(rawHtml: String): String {
-    val policy = """<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'\">"""
-    val headPattern = Regex("(?i)<head(?:\\\\s[^>]*)?>")
-    return if (headPattern.containsMatchIn(rawHtml)) {
-        headPattern.replaceFirst(rawHtml) { it.value + policy }
+    val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
+    val headPattern = Regex("(?i)<head(?:\\s[^>]*)?>")
+    if (headPattern.containsMatchIn(rawHtml)) {
+        return headPattern.replaceFirst(rawHtml) { it.value + policy }
+    }
+    val htmlPattern = Regex("(?i)<html(?:\\s[^>]*)?>")
+    return if (htmlPattern.containsMatchIn(rawHtml)) {
+        htmlPattern.replaceFirst(rawHtml) { it.value + "<head>$policy</head>" }
     } else {
-        "<head>$policy</head>$rawHtml"
+        "<!doctype html><html><head>$policy</head><body>$rawHtml</body></html>"
     }
 }
 
