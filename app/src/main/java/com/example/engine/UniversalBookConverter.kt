@@ -307,6 +307,59 @@ class UniversalBookConverter(private val context: Context) {
         )
     }
 
+    suspend fun saveDownloadedHtmlGame(
+        bookId: String,
+        title: String,
+        author: String,
+        htmlBytes: ByteArray,
+        language: String? = null,
+        subjects: List<String> = emptyList()
+    ): ConvertedBookResult = withContext(Dispatchers.IO) {
+        require(htmlBytes.isNotEmpty()) { "El juego descargado está vacío" }
+        require(htmlBytes.size <= 50 * 1024 * 1024) { "El juego supera el límite de 50 MiB" }
+
+        val safeId = bookId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+            .take(80)
+            .ifBlank { UUID.randomUUID().toString() }
+        val htmlFile = File(htmlDir, "$safeId.html")
+        val epubFile = File(epubDir, "$safeId.epub")
+        val htmlText = decodeTextSmart(htmlBytes)
+        require(htmlText.contains("<html", ignoreCase = true) || htmlText.contains("<body", ignoreCase = true)) {
+            "El archivo descargado no parece ser un juego HTML válido"
+        }
+
+        htmlFile.writeText(htmlText, Charsets.UTF_8)
+        EpubWriter.writeEpub(
+            outputFile = epubFile,
+            title = title,
+            author = author.ifBlank { "Autor desconocido" },
+            language = language ?: "es",
+            chapters = listOf(
+                ChapterInput(
+                    title = title,
+                    paragraphs = listOf("Juego HTML5 descargado para ejecutarse dentro de LuminaBook.")
+                )
+            )
+        )
+
+        ConvertedBookResult(
+            id = safeId,
+            title = title,
+            author = author.ifBlank { "Autor desconocido" },
+            originalFormat = BookFormat.HTML,
+            epubPath = epubFile.absolutePath,
+            originalPath = htmlFile.absolutePath,
+            coverPath = null,
+            totalChapters = 1,
+            fileSizeBytes = htmlFile.length(),
+            isConvertedFromOtherFormat = false,
+            language = BookMetadataDetector.mapLanguageCode(language),
+            genre = BookMetadataDetector.resolveGenre(subjects, title, emptyList()),
+            description = "Juego HTML5 descargado del catálogo LuminaBook.",
+            estimatedPages = 1
+        )
+    }
+
     fun deleteBookFiles(epubPath: String, originalPath: String?, coverPath: String?) {
         runCatching { File(epubPath).delete() }
         originalPath?.let { runCatching { File(it).delete() } }
