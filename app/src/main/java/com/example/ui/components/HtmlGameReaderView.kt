@@ -180,7 +180,7 @@ private class LuminaHtmlJsBridge(
 ) {
     @JavascriptInterface
     fun postNotification(title: String?, body: String?) {
-        onNotify(title.orEmpty(), body.orEmpty())
+        onNotify(title.orEmpty().take(100), body.orEmpty().take(500))
     }
 
     @JavascriptInterface
@@ -213,6 +213,7 @@ private class LuminaHtmlJsBridge(
     @JavascriptInterface
     fun syncSaveState(jsonStr: String?, explicitRecord: String?) {
         val safeJson = jsonStr?.takeIf { it.isNotBlank() } ?: "{}"
+        if (safeJson.length > 512 * 1024) return
         snapshot.savedStateJson = safeJson
         onSaveState(safeJson, explicitRecord?.takeIf { it.isNotBlank() })
     }
@@ -508,6 +509,12 @@ fun HtmlGameReaderView(
                             javaScriptEnabled = true
                             domStorageEnabled = true
                             allowFileAccess = false
+                            allowContentAccess = false
+                            allowFileAccessFromFileURLs = false
+                            allowUniversalAccessFromFileURLs = false
+                            javaScriptCanOpenWindowsAutomatically = false
+                            databaseEnabled = false
+                            cacheMode = WebSettings.LOAD_DEFAULT
                             mediaPlaybackRequiresUserGesture = false
                             useWideViewPort = true
                             loadWithOverviewMode = true
@@ -551,6 +558,7 @@ fun HtmlGameReaderView(
                             "LuminaGameBridge"
                         )
 
+                        setSupportMultipleWindows(false)
                         webViewClient = object : WebViewClient() {
                             override fun shouldInterceptRequest(
                                 view: WebView?,
@@ -1194,7 +1202,7 @@ internal fun injectLuminaGameBridge(
   if (_nativeRaf) {
     window.requestAnimationFrame = function(cb) {
       if (window.__luminaPaused) {
-        _pausedRafQueue.push(cb);
+        if (_pausedRafQueue.length < 120) _pausedRafQueue.push(cb);
         return -1;
       }
       return _nativeRaf(cb);
@@ -1206,6 +1214,8 @@ internal fun injectLuminaGameBridge(
     if (!OrigCtx) return OrigCtx;
     var Wrapped = function() {
       var ctx = new OrigCtx();
+      _audioContexts = _audioContexts.filter(function(existing) { return existing && existing.state !== 'closed'; });
+      if (_audioContexts.length >= 24) _audioContexts.shift();
       _audioContexts.push(ctx);
       if (window.__luminaPaused || window.__luminaMuted) {
         try { ctx.suspend(); } catch (_) {}
@@ -1286,7 +1296,8 @@ internal fun injectLuminaGameBridge(
         if (k !== null) out[k] = window.localStorage.getItem(k);
       }
     } catch (_) {}
-    return JSON.stringify(out);
+    var serialized = JSON.stringify(out);
+    return serialized.length <= 524288 ? serialized : '';
   }
 
   var _syncTimer = null;
@@ -1294,7 +1305,8 @@ internal fun injectLuminaGameBridge(
     if (_syncTimer) { clearTimeout(_syncTimer); _syncTimer = null; }
     try {
       if (window.LuminaGameBridge) {
-        window.LuminaGameBridge.syncSaveState(dumpLocalStorage(), _explicitRecord || '');
+        var payload = dumpLocalStorage();
+        if (payload) window.LuminaGameBridge.syncSaveState(payload, _explicitRecord || '');
       }
     } catch (_) {}
   };
@@ -1362,12 +1374,17 @@ internal fun injectLuminaGameBridge(
             resolve('granted');
             return;
           }
-          _pendingResolvers.push(function(val) {
+          var resolver = function(val) {
+            var index = _pendingResolvers.indexOf(resolver);
+            if (index >= 0) _pendingResolvers.splice(index, 1);
             if (typeof callback === 'function') callback(val);
             resolve(val);
-          });
+          };
+          _pendingResolvers.push(resolver);
           setTimeout(function() {
-            if (_pendingResolvers.length > 0) {
+            var index = _pendingResolvers.indexOf(resolver);
+            if (index >= 0) {
+              _pendingResolvers.splice(index, 1);
               var p = _perm === 'granted' ? 'granted' : 'default';
               if (typeof callback === 'function') callback(p);
               resolve(p);
