@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
@@ -215,6 +216,8 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 val saved = repository.downloadOnlineBook(book)
                 downloadFeedback.value = "Descargado para lectura sin conexión: ${saved.title}"
                 onDownloaded(saved)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 downloadFeedback.value = "Error al descargar: ${e.localizedMessage ?: "revisa tu conexión"}"
             } finally {
