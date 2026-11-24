@@ -20,6 +20,9 @@ import com.example.engine.ReaderTextAlign
 import com.example.engine.ReaderTheme
 import com.example.engine.ReadingMode
 import com.example.engine.TapNavigationMode
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -60,50 +63,56 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     val isPdfOriginalMode: StateFlow<Boolean> = _isPdfOriginalMode.asStateFlow()
 
     private var loadedBookId: String? = null
+    private var loadJob: Job? = null
+    private var bookmarksJob: Job? = null
+    private var progressJob: Job? = null
 
     fun loadBook(bookId: String) {
         if (loadedBookId == bookId && _loadState.value is ReaderLoadState.Ready) return
+        loadJob?.cancel()
+        bookmarksJob?.cancel()
+        progressJob?.cancel()
         loadedBookId = bookId
+        _bookmarks.value = emptyList()
         _loadState.value = ReaderLoadState.Loading
         _isPdfOriginalMode.value = false
-
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             try {
                 val book = repository.getBookById(bookId)
                     ?: throw IllegalStateException("Libro no encontrado en la biblioteca")
                 val parsed = if (book.isHtmlGame) {
-                    runCatching { repository.loadParsedEpub(book) }.getOrElse {
+                    try {
+                        repository.loadParsedEpub(book)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
                         ParsedEpub(
-                            title = book.title,
-                            author = book.author,
-                            coverBytes = null,
-                            chapters = listOf(
-                                EpubChapter(
-                                    index = 0,
-                                    title = book.title,
-                                    blocks = listOf(ReaderBlock.Paragraph(book.description))
-                                )
-                            ),
-                            language = book.language,
-                            genre = book.genre
+                            title = book.title, author = book.author, coverBytes = null,
+                            chapters = listOf(EpubChapter(
+                                index = 0, title = book.title,
+                                blocks = listOf(ReaderBlock.Paragraph(book.description))
+                            )),
+                            language = book.language, genre = book.genre
                         )
                     }
-                } else {
-                    repository.loadParsedEpub(book)
-                }
+                } else repository.loadParsedEpub(book)
                 repository.syncBookMetadataIfNeeded(book, parsed)
+                if (loadedBookId != bookId) return@launch
                 val safeChapter = book.currentChapterIndex.coerceIn(0, (parsed.chapters.size - 1).coerceAtLeast(0))
                 _currentChapterIndex.value = safeChapter
                 _currentPageIndex.value = book.currentPageInChapter.coerceAtLeast(0)
                 _loadState.value = ReaderLoadState.Ready(book, parsed)
-
-                launch {
+                bookmarksJob = launch {
                     repository.observeBookmarks(bookId).collect { list ->
-                        _bookmarks.value = list
+                        if (loadedBookId == bookId) _bookmarks.value = list
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _loadState.value = ReaderLoadState.Error(e.localizedMessage ?: "No se pudo abrir el libro")
+                if (loadedBookId == bookId) {
+                    _loadState.value = ReaderLoadState.Error(e.localizedMessage ?: "No se pudo abrir el libro")
+                }
             }
         }
     }
@@ -112,14 +121,16 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val ready = _loadState.value as? ReaderLoadState.Ready ?: return
         val clampedChapter = chapterIndex.coerceIn(0, (ready.epub.chapters.size - 1).coerceAtLeast(0))
         _currentChapterIndex.value = clampedChapter
-        _currentPageIndex.value = pageIndex.coerceAtLeast(0)
-        persistProgress(ready, clampedChapter, pageIndex.coerceAtLeast(0), totalPagesInChapter = 1)
+        val safePage = pageIndex.coerceAtLeast(0)
+        _currentPageIndex.value = safePage
+        persistProgress(ready, clampedChapter, safePage, totalPagesInChapter = 1)
     }
 
     fun updatePage(pageIndex: Int, totalPagesInChapter: Int) {
         val ready = _loadState.value as? ReaderLoadState.Ready ?: return
-        _currentPageIndex.value = pageIndex
-        persistProgress(ready, _currentChapterIndex.value, pageIndex, totalPagesInChapter)
+        val safePage = pageIndex.coerceAtLeast(0)
+        _currentPageIndex.value = safePage
+        persistProgress(ready, _currentChapterIndex.value, safePage, totalPagesInChapter)
     }
 
     private fun persistProgress(
@@ -129,16 +140,20 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         totalPagesInChapter: Int
     ) {
         val totalChapters = ready.epub.chapters.size.coerceAtLeast(1)
-        val chapterFraction = (pageIdx + 1).toFloat() / totalPagesInChapter.coerceAtLeast(1).toFloat()
-        val overallPercent = (((chapterIdx + chapterFraction) / totalChapters.toFloat()) * 100f)
+        val safeChapter = chapterIdx.coerceIn(0, totalChapters - 1)
+        val safePage = pageIdx.coerceAtLeast(0)
+        val chapterFraction = (safePage + 1).toFloat() / totalPagesInChapter.coerceAtLeast(1).toFloat()
+        val overallPercent = (((safeChapter + chapterFraction) / totalChapters.toFloat()) * 100f)
             .toInt()
             .coerceIn(1, 100)
-
-        viewModelScope.launch {
+        progressJob?.cancel()
+        progressJob = viewModelScope.launch {
+            delay(350)
+            if (loadedBookId != ready.book.id) return@launch
             repository.updateReadingProgress(
                 bookId = ready.book.id,
-                chapterIndex = chapterIdx,
-                pageIndex = pageIdx,
+                chapterIndex = safeChapter,
+                pageIndex = safePage,
                 progressPercent = overallPercent
             )
         }
