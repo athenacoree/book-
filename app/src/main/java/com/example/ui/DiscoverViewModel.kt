@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 sealed class CatalogLoadState {
@@ -74,6 +76,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     private val gamesLoading = MutableStateFlow(false)
     private val gamesError = MutableStateFlow<String?>(null)
     private val downloadingGameIds = MutableStateFlow<Set<Long>>(emptySet())
+    private var catalogRefreshJob: Job? = null
 
     private val queryParams = combine(searchQuery, selectedLanguage, selectedTopic) { q, lang, topic ->
         Triple(q, lang, topic)
@@ -156,25 +159,32 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun refreshCatalog() {
-        viewModelScope.launch {
+        // Keep only the newest request when the user changes filters or submits a new search.
+        catalogRefreshJob?.cancel()
+        catalogRefreshJob = viewModelScope.launch {
             if (!repository.networkMonitor.isCurrentlyOnline()) {
                 loadState.value = CatalogLoadState.Offline
                 gamesError.value = "El catálogo de juegos necesita conexión a Internet."
+                gamesLoading.value = false
                 return@launch
             }
 
+            val query = searchQuery.value.trim()
+            val language = selectedLanguage.value
+            val topic = selectedTopic.value
             loadState.value = CatalogLoadState.Loading
             gamesLoading.value = true
             gamesError.value = null
 
             try {
                 val results = repository.searchOnlineCatalog(
-                    query = searchQuery.value,
-                    languageCode = selectedLanguage.value,
-                    topic = selectedTopic.value
+                    query = query,
+                    languageCode = language,
+                    topic = topic
                 )
                 loadState.value = CatalogLoadState.Success(results)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 loadState.value = if (!repository.networkMonitor.isCurrentlyOnline()) {
                     CatalogLoadState.Offline
                 } else {
@@ -185,11 +195,12 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             }
 
             try {
-                games.value = repository.searchOnlineGames(searchQuery.value)
+                games.value = repository.searchOnlineGames(query)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
             } finally {
-                gamesLoading.value = false
+                if (catalogRefreshJob?.isActive == true) gamesLoading.value = false
             }
         }
     }
