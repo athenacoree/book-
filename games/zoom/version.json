@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "game": "ZOOM",
   "title": "ZOOM — Operación Aurora",
   "file": "https://raw.githubusercontent.com/athenacoree/book-/main/games/zoom/game-v1.html",
-  "notes": "Lanzamiento inicial: campaña de 3 misiones."
+  "notes": "Actualización 1.0.1: banda sonora, efectos de disparo, energía, objetivos y controles de audio."
 }
