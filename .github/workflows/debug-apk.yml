@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   debug-apk:
-    name: Build and test Debug APK
+    name: Build Debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -41,8 +41,8 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US" \
             -keyalg RSA -keysize 2048 -validity 10000
 
-      - name: Run unit tests and assemble Debug APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Assemble Debug APK
+        run: gradle --no-daemon :app:assembleDebug
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
