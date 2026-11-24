@@ -236,7 +236,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             downloadFeedback.value = null
             try {
                 val saved = repository.downloadOnlineGame(item)
-                downloadFeedback.value = "Juego guardado para jugar sin conexión: ${saved.title}"
+                downloadFeedback.value = "Juego instalado o actualizado. Tu progreso se conservó: ${saved.title}"
                 onDownloaded(saved)
             } catch (e: Exception) {
                 downloadFeedback.value = "Error al descargar el juego: ${e.localizedMessage ?: "revisa tu conexión"}"
