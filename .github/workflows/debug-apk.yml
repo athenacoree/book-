@@ -10,6 +10,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: luminabook-debug-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -53,4 +57,4 @@ jobs:
           name: LuminaBook-debug-${{ github.run_number }}
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 3
