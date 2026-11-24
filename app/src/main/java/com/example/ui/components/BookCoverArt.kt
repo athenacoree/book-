@@ -68,7 +68,9 @@ fun BookCoverArt(
     showFormatBadge: Boolean = true
 ) {
     val shape = RoundedCornerShape(cornerRadius)
-    val validCoverFile = coverPath?.let { File(it) }?.takeIf { it.exists() }
+    val coverModel: Any? = coverPath?.trim()?.takeIf { it.isNotBlank() }?.let { path ->
+        if (path.startsWith("https://", ignoreCase = true)) path else File(path).takeIf { it.exists() }
+    }
 
     Box(
         modifier = modifier
@@ -77,9 +79,9 @@ fun BookCoverArt(
             .clip(shape)
             .border(0.75.dp, Color.Black.copy(alpha = 0.14f), shape)
     ) {
-        if (validCoverFile != null) {
+        if (coverModel != null) {
             AsyncImage(
-                model = validCoverFile,
+                model = coverModel,
                 contentDescription = "Portada de $title",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
