@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
@@ -43,6 +44,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +91,7 @@ fun DiscoverScreen(
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val (sensorTiltX, sensorTiltY) = rememberDeviceTilt()
+    var searchExpanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -131,11 +137,25 @@ fun DiscoverScreen(
                     }
                 }
             }
-            AppThemeToggleChip(
-                appThemeMode = appThemeMode,
-                onToggleTheme = onSetAppThemeMode,
-                modifier = Modifier.testTag("discover_theme_toggle")
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = {
+                        searchExpanded = !searchExpanded
+                        if (!searchExpanded) keyboard?.hide()
+                    },
+                    modifier = Modifier.testTag("discover_search_toggle")
+                ) {
+                    Icon(
+                        imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                        contentDescription = if (searchExpanded) "Ocultar buscador" else "Mostrar buscador"
+                    )
+                }
+                AppThemeToggleChip(
+                    appThemeMode = appThemeMode,
+                    onToggleTheme = onSetAppThemeMode,
+                    modifier = Modifier.testTag("discover_theme_toggle")
+                )
+            }
         }
 
         AnimatedVisibility(visible = uiState.downloadFeedback != null) {
@@ -166,36 +186,38 @@ fun DiscoverScreen(
             }
         }
 
-        OutlinedTextField(
-            value = uiState.searchQuery,
-            onValueChange = onSearchQueryChange,
-            placeholder = { Text("Buscar por título o autor (Cervantes, Verne…)") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            trailingIcon = {
-                IconButton(onClick = {
+        AnimatedVisibility(visible = searchExpanded) {
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = { Text("Buscar por título o autor (Cervantes, Verne…)") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    IconButton(onClick = {
+                        keyboard?.hide()
+                        onSearchSubmit()
+                    }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "Buscar")
+                    }
+                },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
                     keyboard?.hide()
                     onSearchSubmit()
-                }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = "Buscar")
-                }
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                keyboard?.hide()
-                onSearchSubmit()
-            }),
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 4.dp)
-                .testTag("discover_search_input")
-        )
+                }),
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 4.dp)
+                    .testTag("discover_search_input")
+            )
+        }
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
