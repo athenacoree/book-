@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 
 sealed class CatalogLoadState {
@@ -200,7 +201,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 if (e is CancellationException) throw e
                 gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
             } finally {
-                if (catalogRefreshJob?.isActive == true) gamesLoading.value = false
+                if (currentCoroutineContext()[Job] === catalogRefreshJob) gamesLoading.value = false
             }
         }
     }
