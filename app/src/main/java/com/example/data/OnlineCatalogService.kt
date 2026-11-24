@@ -209,7 +209,7 @@ class OnlineCatalogService {
 
     private fun requireAllowedDownloadUrl(rawUrl: String) {
         val uri = Uri.parse(rawUrl)
-        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "raw.githubusercontent.com")
+        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "aleph.gutenberg.org", "gutenberg.org", "raw.githubusercontent.com")
         require(uri.scheme.equals("https", true) && uri.userInfo == null && uri.port == -1 &&
             uri.host?.lowercase() in allowedHosts) { "La dirección de descarga no está permitida" }
     }
