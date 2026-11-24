@@ -468,11 +468,23 @@ class UniversalBookConverter(private val context: Context) {
                     paragraphs = listOf("Juego instalado en GITBOOK. Los recursos del paquete se conservan localmente.")
                 ))
             )
-            gameRoot.deleteRecursively()
-            if (!staging.renameTo(gameRoot)) {
+            val backup = File(htmlDir, "$safeId.assets.old")
+            backup.deleteRecursively()
+            val hadPreviousPackage = gameRoot.exists()
+            if (hadPreviousPackage && !gameRoot.renameTo(backup)) {
+                throw IllegalStateException("No se pudo preparar la versión instalada para actualizarla")
+            }
+            val installed = staging.renameTo(gameRoot) || runCatching {
                 staging.copyRecursively(gameRoot, overwrite = true)
                 staging.deleteRecursively()
+                true
+            }.getOrDefault(false)
+            if (!installed) {
+                gameRoot.deleteRecursively()
+                if (hadPreviousPackage) backup.renameTo(gameRoot)
+                throw IllegalStateException("No se pudo instalar el paquete nuevo; se conservó la versión anterior")
             }
+            backup.deleteRecursively()
             val htmlFile = File(gameRoot, "index.html")
             ConvertedBookResult(
                 id = safeId,
