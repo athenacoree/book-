@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import kotlinx.coroutines.CancellationException
 
 class BookRepository(context: Context) {
 
@@ -39,8 +40,10 @@ class BookRepository(context: Context) {
     suspend fun getBookById(bookId: String): BookEntity? = dao.getBookById(bookId)
 
     suspend fun loadParsedEpub(book: BookEntity): ParsedEpub = withContext(Dispatchers.IO) {
+        val sourceFile = File(book.epubPath)
+        require(sourceFile.isFile && sourceFile.canRead()) { "El archivo del libro no está disponible" }
         val imageCacheDir = File(appContext.cacheDir, "epub_images/${book.id}")
-        EpubParser.parse(File(book.epubPath), imageCacheDir)
+        EpubParser.parse(sourceFile, imageCacheDir)
     }
 
     suspend fun updateReadingProgress(
@@ -213,9 +216,11 @@ class BookRepository(context: Context) {
         require(item.fileFormat.equals("html", ignoreCase = true)) {
             "Este formato de juego todavía no es compatible con la descarga directa"
         }
+        val localId = "lbg-${item.id}"
+        dao.getBookById(localId)?.let { return@withContext it }
         val bytes = onlineCatalog.downloadCatalogAsset(item.storagePath)
         val result = converter.saveDownloadedHtmlGame(
-            bookId = "lbg-${item.id}",
+            bookId = localId,
             title = item.title,
             author = item.author,
             htmlBytes = bytes,
@@ -228,14 +233,22 @@ class BookRepository(context: Context) {
     }
 
     suspend fun downloadOnlineBook(book: GutendexBook): BookEntity {
+        val localId = "gut-${book.id}"
+        dao.getBookById(localId)?.let { return it }
         val epubUrl = book.epubDownloadUrl
             ?: throw IllegalStateException("No hay descarga EPUB disponible")
         val epubBytes = onlineCatalog.downloadBytes(epubUrl)
         val coverBytes = book.coverImageUrl?.let { url ->
-            runCatching { onlineCatalog.downloadBytes(url) }.getOrNull()
+            try {
+                onlineCatalog.downloadBytes(url)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
         }
         val result = converter.saveDownloadedEpub(
-            bookId = "gut-${book.id}",
+            bookId = localId,
             title = book.title,
             author = book.authorDisplay,
             epubBytes = epubBytes,
