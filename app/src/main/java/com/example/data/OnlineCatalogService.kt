@@ -78,7 +78,13 @@ data class SupabaseCatalogItem(
     @Json(name = "language_code") val languageCode: String? = null,
     val subjects: List<String> = emptyList(),
     @Json(name = "file_size_bytes") val fileSizeBytes: Long = 0L,
-    @Json(name = "download_count") val downloadCount: Long = 0L
+    @Json(name = "download_count") val downloadCount: Long = 0L,
+    @Json(name = "game_version") val gameVersion: String = "1.0.0",
+    @Json(name = "update_manifest_path") val updateManifestPath: String? = null,
+    @Json(name = "package_entry") val packageEntry: String = "index.html",
+    @Json(name = "sha256") val sha256: String? = null,
+    @Json(name = "release_notes") val releaseNotes: String = "",
+    @Json(name = "minimum_app_version") val minimumAppVersion: String = "1.0.0"
 )
 
 private interface SupabaseCatalogApi {
@@ -86,7 +92,7 @@ private interface SupabaseCatalogApi {
     suspend fun fetchPublishedItems(
         @Header("apikey") apiKey: String,
         @Header("Authorization") authorization: String,
-        @Query("select") select: String = "id,slug,title,author,description,item_type,file_format,storage_path,cover_path,language_code,subjects,file_size_bytes,download_count",
+        @Query("select") select: String = "id,slug,title,author,description,item_type,file_format,storage_path,cover_path,language_code,subjects,file_size_bytes,download_count,game_version,update_manifest_path,package_entry,sha256,release_notes,minimum_app_version",
         @Query("is_published") published: String = "eq.true",
         @Query("item_type") itemType: String,
         @Query("file_format") fileFormat: String? = null,
