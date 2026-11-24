@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, BookmarkEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -40,6 +40,12 @@ abstract class BookDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_bookmarks_bookId_createdAt ON bookmarks(bookId, createdAt)")
+            }
+        }
+
         fun getInstance(context: Context): BookDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -47,7 +53,8 @@ abstract class BookDatabase : RoomDatabase() {
                     BookDatabase::class.java,
                     "luminabook_offline.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     .build()
                     .also { INSTANCE = it }
             }
