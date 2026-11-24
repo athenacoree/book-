@@ -403,8 +403,9 @@ class UniversalBookConverter(private val context: Context) {
                         while (true) {
                             val entry = zip.nextEntry ?: break
                             val name = entry.name.replace('\\\\', '/')
-                            require(!name.startsWith("/") && !name.contains(":") &&
-                                name.split('/').none { it == ".." || it.isBlank() }) {
+                            val normalizedName = name.trimEnd('/')
+                            require(normalizedName.isNotBlank() && !name.startsWith("/") && !name.contains(":") &&
+                                normalizedName.split('/').none { it == ".." || it.isBlank() }) {
                                 "El ZIP contiene una ruta no permitida"
                             }
                             if (!entry.isDirectory) {
@@ -439,14 +440,23 @@ class UniversalBookConverter(private val context: Context) {
             require(entry.isFile && entry.length() > 0) {
                 "No se encontró el archivo de inicio '$safeEntry' dentro del paquete"
             }
-            if (entry.name != "index.html" || entry.parentFile != staging) {
-                File(staging, "index.html").writeBytes(entry.readBytes())
-            }
-            val htmlText = File(staging, "index.html").readText(Charsets.UTF_8)
+            val htmlText = entry.readText(Charsets.UTF_8)
             require(htmlText.contains("<html", true) || htmlText.contains("<body", true)) {
                 "El archivo de inicio no es HTML válido"
             }
-            val finalEntry = File(staging, "index.html")
+            val entryParent = if (fileFormat.equals("zip", true)) {
+                safeEntry.substringBeforeLast('/', "").trim('/')
+            } else ""
+            val baseTag = if (entryParent.isNotBlank() &&
+                !Regex("""(?is)<base\\b""").containsMatchIn(htmlText)) {
+                """<base href="https://luminabook.local/$entryParent/">"""
+            } else ""
+            val normalizedHtml = if (baseTag.isNotBlank()) {
+                Regex("(?i)<head(?:\\\\s[^>]*)?>").find(htmlText)?.let {
+                    htmlText.replaceRange(it.range, it.value + baseTag)
+                } ?: "<head>$baseTag</head>$htmlText"
+            } else htmlText
+            File(staging, "index.html").writeText(normalizedHtml, Charsets.UTF_8)
             val destEpub = File(epubDir, "$safeId.epub")
             EpubWriter.writeEpub(
                 outputFile = destEpub,
