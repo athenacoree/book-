@@ -31,7 +31,10 @@ data class BookEntity(
     val estimatedPages: Int = 1,
     val totalImages: Int = 0,
     val gameSaveJson: String = "{}",
-    val gameBestRecord: String = ""
+    val gameBestRecord: String = "",
+    val gameVersion: String = "",
+    val catalogGameId: Long? = null,
+    val gamePackageEntry: String = "index.html"
 )
 
 @Entity(tableName = "bookmarks", indices = [Index(value = ["bookId", "createdAt"])])
