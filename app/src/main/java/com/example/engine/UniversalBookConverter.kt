@@ -379,7 +379,7 @@ class UniversalBookConverter(private val context: Context) {
         require(packageBytes.size <= 64 * 1024 * 1024) { "El paquete supera el límite de 64 MiB" }
         val safeId = bookId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
             .take(80).ifBlank { UUID.randomUUID().toString() }
-        val safeEntry = entryFile.replace('\\\\', '/').trimStart('/')
+        val safeEntry = entryFile.replace('\\', '/').trimStart('/')
         require(safeEntry.isNotBlank() && safeEntry.split('/').none { it == ".." || it.isBlank() }) {
             "La ruta de entrada del juego no es válida"
         }
@@ -402,7 +402,7 @@ class UniversalBookConverter(private val context: Context) {
                     ZipInputStream(ByteArrayInputStream(packageBytes)).use { zip ->
                         while (true) {
                             val entry = zip.nextEntry ?: break
-                            val name = entry.name.replace('\\\\', '/')
+                            val name = entry.name.replace('\\', '/')
                             val normalizedName = name.trimEnd('/')
                             require(normalizedName.isNotBlank() && !name.startsWith("/") && !name.contains(":") &&
                                 normalizedName.split('/').none { it == ".." || it.isBlank() }) {
@@ -448,11 +448,11 @@ class UniversalBookConverter(private val context: Context) {
                 safeEntry.substringBeforeLast('/', "").trim('/')
             } else ""
             val baseTag = if (entryParent.isNotBlank() &&
-                !Regex("""(?is)<base\\b""").containsMatchIn(htmlText)) {
+                !Regex("""(?is)<base\b""").containsMatchIn(htmlText)) {
                 """<base href="https://luminabook.local/$entryParent/">"""
             } else ""
             val normalizedHtml = if (baseTag.isNotBlank()) {
-                Regex("(?i)<head(?:\\\\s[^>]*)?>").find(htmlText)?.let {
+                Regex("(?i)<head(?:\\s[^>]*)?>").find(htmlText)?.let {
                     htmlText.replaceRange(it.range, it.value + baseTag)
                 } ?: "<head>$baseTag</head>$htmlText"
             } else htmlText
