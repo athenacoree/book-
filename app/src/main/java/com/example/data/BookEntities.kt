@@ -1,6 +1,7 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "books")
@@ -33,7 +34,7 @@ data class BookEntity(
     val gameBestRecord: String = ""
 )
 
-@Entity(tableName = "bookmarks")
+@Entity(tableName = "bookmarks", indices = [Index(value = ["bookId", "createdAt"])])
 data class BookmarkEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val bookId: String,
