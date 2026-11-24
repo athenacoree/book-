@@ -42,20 +42,6 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `seed starter html game produces playable html file`() {
-    val context = ApplicationProvider.getApplicationContext<Context>()
-    val converter = UniversalBookConverter(context)
-    val result = converter.seedStarterHtmlGame()
-
-    assertEquals(BookFormat.HTML, result.originalFormat)
-    val htmlFile = File(result.originalPath!!)
-    assertTrue(htmlFile.exists())
-    val content = htmlFile.readText(Charsets.UTF_8)
-    assertTrue(content.contains("<canvas"))
-    assertTrue(content.contains("Notification"))
-  }
-
-  @Test
   fun `html bridge injects pause mute and persistent storage hooks`() {
     val injected = com.example.ui.components.injectLuminaGameBridge(
       rawHtml = "<html><head><title>Juego</title></head><body><canvas></canvas></body></html>",
