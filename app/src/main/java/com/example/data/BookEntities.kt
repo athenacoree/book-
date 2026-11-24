@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -32,9 +33,9 @@ data class BookEntity(
     val totalImages: Int = 0,
     val gameSaveJson: String = "{}",
     val gameBestRecord: String = "",
-    val gameVersion: String = "",
+    @ColumnInfo(defaultValue = "''") val gameVersion: String = "",
     val catalogGameId: Long? = null,
-    val gamePackageEntry: String = "index.html"
+    @ColumnInfo(defaultValue = "'index.html'") val gamePackageEntry: String = "index.html"
 )
 
 @Entity(tableName = "bookmarks", indices = [Index(value = ["bookId", "createdAt"])])
