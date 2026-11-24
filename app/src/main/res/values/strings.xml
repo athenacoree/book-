@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">LuminaBook</string>
+    <string name="nav_library">Biblioteca</string>
+    <string name="nav_converter">Conversor</string>
+    <string name="nav_discover">Explorar</string>
+    <string name="import_book">Importar libro</string>
+    <string name="continue_reading">Continuar leyendo</string>
+    <string name="empty_library_title">Tu estantería está lista</string>
+    <string name="empty_library_subtitle">Importa archivos PDF, MOBI, EPUB, FB2 o TXT para leerlos en formato libro EPUB sin conexión.</string>
+    <string name="offline_mode">Sin conexión</string>
+    <string name="online_mode">En línea</string>
+    <string name="convert_to_epub">Convertir a EPUB</string>
+</resources>

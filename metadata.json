@@ -1,0 +1,6 @@
+{
+  "name": "LuminaBook",
+  "description": "Lector y conversor universal de libros digitales a formato EPUB estilo libro, con soporte para PDF, MOBI, EPUB, FB2 y TXT offline y catálogo online.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
