@@ -498,7 +498,18 @@ class UniversalBookConverter(private val context: Context) {
 
     fun deleteBookFiles(epubPath: String, originalPath: String?, coverPath: String?) {
         runCatching { File(epubPath).delete() }
-        originalPath?.let { runCatching { File(it).delete() } }
+        originalPath?.let { path ->
+            runCatching {
+                val original = File(path)
+                val parent = original.parentFile
+                if (parent != null && parent.parentFile?.canonicalPath == htmlDir.canonicalPath &&
+                    parent.name.endsWith(".assets")) {
+                    parent.deleteRecursively()
+                } else {
+                    original.delete()
+                }
+            }
+        }
         coverPath?.let { runCatching { File(it).delete() } }
     }
 
