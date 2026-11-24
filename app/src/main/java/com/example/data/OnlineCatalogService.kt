@@ -170,19 +170,22 @@ class OnlineCatalogService {
     suspend fun fetchGames(query: String? = null): List<SupabaseCatalogItem> = withContext(Dispatchers.IO) {
         requireConfiguration()
         val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
-        api.fetchPublishedItems(
+        val items = api.fetchPublishedItems(
             apiKey = apiKey,
             authorization = "Bearer $anonKey",
             itemType = "eq.game",
             title = catalogTitleFilter(normalizedQuery)
-        ).map { item ->
+        )
+        val resolvedItems = mutableListOf<SupabaseCatalogItem>()
+        for (item in items) {
             var resolved = item.copy(
                 coverPath = item.coverPath?.takeIf { it.isNotBlank() }?.let { publicStorageUrl(it) }
             )
             val manifestPath = item.updateManifestPath?.takeIf { it.isNotBlank() }
             if (manifestPath != null) {
                 resolved = runCatching {
-                    val manifest = JSONObject(downloadCatalogAsset(manifestPath).toString(Charsets.UTF_8))
+                    val manifestBytes = downloadCatalogAsset(manifestPath)
+                    val manifest = JSONObject(manifestBytes.toString(Charsets.UTF_8))
                     val remoteVersion = manifest.optString("version").takeIf { it.isNotBlank() } ?: item.gameVersion
                     val remoteFile = manifest.optString("file").takeIf { it.isNotBlank() } ?: item.storagePath
                     item.copy(
@@ -195,8 +198,9 @@ class OnlineCatalogService {
                     )
                 }.getOrDefault(resolved)
             }
-            resolved
+            resolvedItems += resolved
         }
+        resolvedItems
     }
 
     suspend fun downloadCatalogAsset(path: String): ByteArray = downloadBytes(publicStorageUrl(path))
