@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 import kotlinx.coroutines.CancellationException
 
 class BookRepository(context: Context) {
@@ -213,23 +214,61 @@ class BookRepository(context: Context) {
         require(item.itemType.equals("game", ignoreCase = true)) {
             "El elemento seleccionado no es un juego"
         }
-        require(item.fileFormat.equals("html", ignoreCase = true)) {
-            "Este formato de juego todavía no es compatible con la descarga directa"
+        require(item.fileFormat.lowercase() in setOf("html", "zip")) {
+            "Formato de juego no compatible: ${item.fileFormat}"
+        }
+        require(isVersionAtLeast(BuildConfig.VERSION_NAME, item.minimumAppVersion)) {
+            "Este juego necesita una versión más reciente de GITBOOK."
         }
         val localId = "lbg-${item.id}"
-        dao.getBookById(localId)?.let { return@withContext it }
+        val installed = dao.getBookById(localId)
+        if (installed != null && installed.gameVersion == item.gameVersion) return@withContext installed
+
         val bytes = onlineCatalog.downloadCatalogAsset(item.storagePath)
-        val result = converter.saveDownloadedHtmlGame(
+        item.sha256?.takeIf { it.isNotBlank() }?.let { expected ->
+            val actual = MessageDigest.getInstance("SHA-256").digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+            require(actual.equals(expected.trim(), ignoreCase = true)) {
+                "La comprobación de integridad del paquete no coincide. No se instaló."
+            }
+        }
+        val result = converter.saveDownloadedGamePackage(
             bookId = localId,
             title = item.title,
             author = item.author,
-            htmlBytes = bytes,
+            packageBytes = bytes,
+            fileFormat = item.fileFormat,
+            entryFile = item.packageEntry,
             language = item.languageCode,
             subjects = item.subjects
         )
-        val entity = result.toEntity()
+        val entity = result.toEntity().copy(
+            gameSaveJson = installed?.gameSaveJson ?: "{}",
+            gameBestRecord = installed?.gameBestRecord ?: "",
+            gameVersion = item.gameVersion,
+            catalogGameId = item.id,
+            gamePackageEntry = "index.html",
+            addedTimestamp = installed?.addedTimestamp ?: System.currentTimeMillis(),
+            isFavorite = installed?.isFavorite ?: false,
+            currentChapterIndex = installed?.currentChapterIndex ?: 0,
+            currentPageInChapter = installed?.currentPageInChapter ?: 0,
+            progressPercent = installed?.progressPercent ?: 0
+        )
         dao.insertBook(entity)
         entity
+    }
+
+    private fun isVersionAtLeast(current: String, minimum: String): Boolean {
+        fun parts(value: String) = value.split(".", "-", "+").take(4)
+            .map { it.toIntOrNull() ?: 0 }
+        val a = parts(current)
+        val b = parts(minimum)
+        for (index in 0 until maxOf(a.size, b.size)) {
+            val left = a.getOrElse(index) { 0 }
+            val right = b.getOrElse(index) { 0 }
+            if (left != right) return left > right
+        }
+        return true
     }
 
     suspend fun downloadOnlineBook(book: GutendexBook): BookEntity {
