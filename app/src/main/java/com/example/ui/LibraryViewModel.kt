@@ -2,12 +2,14 @@ package com.example.ui
 
 import android.app.Application
 import android.net.Uri
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.BookEntity
 import com.example.data.BookRepository
 import com.example.engine.AppThemeMode
 import com.example.engine.ConversionProgress
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -119,12 +121,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     init {
         viewModelScope.launch {
             val currentBooks = repository.allBooks.first()
-            currentBooks.filter { it.wordCount == 0 }.forEach { book ->
-                runCatching {
-                    val parsed = repository.loadParsedEpub(book)
-                    repository.syncBookMetadataIfNeeded(book, parsed)
+            currentBooks.asSequence()
+                .filter { !it.isHtmlGame && it.wordCount == 0 && File(it.epubPath).isFile }
+                .forEach { book ->
+                    try {
+                        val parsed = repository.loadParsedEpub(book)
+                        repository.syncBookMetadataIfNeeded(book, parsed)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // A damaged file must not prevent the rest of the library from loading.
+                    }
                 }
-            }
         }
     }
 
@@ -146,17 +154,23 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             conversionError.value = null
             lastConvertedBook.value = null
             var lastBook: BookEntity? = null
-            for (uri in uris) {
-                try {
-                    val book = repository.importAndConvertBook(uri) { progress ->
-                        activeConversion.value = progress
+            val errors = mutableListOf<String>()
+            try {
+                for (uri in uris) {
+                    try {
+                        lastBook = repository.importAndConvertBook(uri) { progress ->
+                            activeConversion.value = progress
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        errors += e.localizedMessage ?: "No se pudo convertir uno de los archivos."
                     }
-                    lastBook = book
-                } catch (e: Exception) {
-                    conversionError.value = e.localizedMessage ?: "No se pudo convertir el archivo seleccionado."
                 }
+            } finally {
+                activeConversion.value = null
             }
-            activeConversion.value = null
+            if (errors.isNotEmpty()) conversionError.value = errors.take(3).joinToString("\n")
             if (lastBook != null) {
                 lastConvertedBook.value = lastBook
                 onBookReady?.invoke(lastBook)
