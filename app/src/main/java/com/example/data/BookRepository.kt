@@ -174,6 +174,33 @@ class BookRepository(context: Context) {
         return onlineCatalog.fetchBooks(query, languageCode, topic)
     }
 
+    suspend fun searchOnlineGames(query: String? = null): List<SupabaseCatalogItem> {
+        return onlineCatalog.fetchGames(query).filter {
+            it.fileFormat.equals("html", ignoreCase = true)
+        }
+    }
+
+    suspend fun downloadOnlineGame(item: SupabaseCatalogItem): BookEntity = withContext(Dispatchers.IO) {
+        require(item.itemType.equals("game", ignoreCase = true)) {
+            "El elemento seleccionado no es un juego"
+        }
+        require(item.fileFormat.equals("html", ignoreCase = true)) {
+            "Este formato de juego todavía no es compatible con la descarga directa"
+        }
+        val bytes = onlineCatalog.downloadCatalogAsset(item.storagePath)
+        val result = converter.saveDownloadedHtmlGame(
+            bookId = "lbg-${item.id}",
+            title = item.title,
+            author = item.author,
+            htmlBytes = bytes,
+            language = item.languageCode,
+            subjects = item.subjects
+        )
+        val entity = result.toEntity()
+        dao.insertBook(entity)
+        entity
+    }
+
     suspend fun downloadOnlineBook(book: GutendexBook): BookEntity {
         val epubUrl = book.epubDownloadUrl
             ?: throw IllegalStateException("No hay descarga EPUB disponible")
