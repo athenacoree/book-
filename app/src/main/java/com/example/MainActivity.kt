@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -56,6 +57,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,8 +67,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -143,6 +148,12 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
 
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val discoverState by discoverViewModel.uiState.collectAsStateWithLifecycle()
+
+    var showStartup by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1450)
+        showStartup = false
+    }
 
     LuminaBookTheme(appThemeMode = libraryState.appThemeMode) {
         val backStackEntry by navController.currentBackStackEntryAsState()
@@ -382,6 +393,25 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                 }
             }
         }
+        }
+        if (showStartup) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color(0xFFF8FAFC)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("G", style = MaterialTheme.typography.displayLarge,
+                        color = Color(0xFF18A9B8), fontWeight = FontWeight.Black)
+                    Text("GITBOOK", style = MaterialTheme.typography.headlineLarge,
+                        color = Color(0xFF172033), fontWeight = FontWeight.ExtraBold)
+                    Spacer(Modifier.height(12.dp))
+                    Text("Estamos creando tu experiencia",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color(0xFF526174), textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(22.dp))
+                    CircularProgressIndicator(color = Color(0xFF18A9B8), strokeWidth = 3.dp)
+                }
+            }
         }
     }
 }
