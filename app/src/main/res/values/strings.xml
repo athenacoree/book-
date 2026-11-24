@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">LuminaBook</string>
+    <string name="app_name">GITBOOK</string>
     <string name="nav_library">Biblioteca</string>
     <string name="nav_converter">Conversor</string>
     <string name="nav_discover">Explorar</string>
