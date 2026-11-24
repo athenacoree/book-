@@ -2,4 +2,5 @@
 <paths>
     <files-path name="library_epubs" path="library_epubs/" />
     <files-path name="book_covers" path="book_covers/" />
+    <cache-path name="catalog_downloads" path="catalog_downloads/" />
 </paths>
