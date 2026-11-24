@@ -514,6 +514,7 @@ fun HtmlGameReaderView(
                             allowUniversalAccessFromFileURLs = false
                             javaScriptCanOpenWindowsAutomatically = false
                             databaseEnabled = false
+                            supportMultipleWindows = false
                             cacheMode = WebSettings.LOAD_DEFAULT
                             mediaPlaybackRequiresUserGesture = false
                             useWideViewPort = true
@@ -558,7 +559,6 @@ fun HtmlGameReaderView(
                             "LuminaGameBridge"
                         )
 
-                        setSupportMultipleWindows(false)
                         webViewClient = object : WebViewClient() {
                             override fun shouldInterceptRequest(
                                 view: WebView?,
