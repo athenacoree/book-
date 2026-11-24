@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.foundation.border
 import com.example.data.GutendexBook
+import com.example.data.SupabaseCatalogItem
 import com.example.engine.AppThemeMode
 import com.example.engine.BookMetadataDetector
 import com.example.ui.CatalogLoadState
@@ -75,7 +76,10 @@ fun DiscoverScreen(
     onLanguageSelected: (String) -> Unit,
     onTopicSelected: (String) -> Unit,
     onDownloadBook: (GutendexBook) -> Unit,
+    onDownloadGame: (SupabaseCatalogItem) -> Unit,
     onOpenDownloadedBook: (String) -> Unit,
+    onOpenDownloadedGame: (String) -> Unit,
+    onCatalogSectionSelected: (String) -> Unit,
     onGoToOfflineLibrary: () -> Unit,
     onClearFeedback: () -> Unit,
     modifier: Modifier = Modifier
@@ -193,30 +197,102 @@ fun DiscoverScreen(
                 .testTag("discover_search_input")
         )
 
-        // Language + Topic Filters
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val languages = listOf("es" to "Español", "en" to "Inglés", "" to "Todos")
-            items(languages) { (code, label) ->
+            item {
                 FilterChip(
-                    selected = uiState.selectedLanguage == code,
-                    onClick = { onLanguageSelected(code) },
-                    label = { Text(label) }
+                    selected = uiState.selectedCatalogSection == "books",
+                    onClick = { onCatalogSectionSelected("books") },
+                    label = { Text("Libros EPUB") }
                 )
             }
-            val topics = listOf("fiction" to "Ficción", "adventure" to "Aventura", "philosophy" to "Filosofía", "history" to "Historia")
-            items(topics) { (topic, label) ->
+            item {
                 FilterChip(
-                    selected = uiState.selectedTopic == topic,
-                    onClick = { onTopicSelected(topic) },
-                    label = { Text(label) }
+                    selected = uiState.selectedCatalogSection == "games",
+                    onClick = { onCatalogSectionSelected("games") },
+                    label = { Text("Juegos HTML5") }
                 )
             }
         }
 
-        when (val state = uiState.loadState) {
+        if (uiState.selectedCatalogSection == "books") {
+            // Language + Topic Filters
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val languages = listOf("es" to "Español", "en" to "Inglés", "" to "Todos")
+                items(languages) { (code, label) ->
+                    FilterChip(
+                        selected = uiState.selectedLanguage == code,
+                        onClick = { onLanguageSelected(code) },
+                        label = { Text(label) }
+                    )
+                }
+                val topics = listOf("fiction" to "Ficción", "adventure" to "Aventura", "philosophy" to "Filosofía", "history" to "Historia")
+                items(topics) { (topic, label) ->
+                    FilterChip(
+                        selected = uiState.selectedTopic == topic,
+                        onClick = { onTopicSelected(topic) },
+                        label = { Text(label) }
+                    )
+                }
+            }
+        }
+
+        if (uiState.selectedCatalogSection == "games") {
+            when {
+                !uiState.isOnline -> {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Conéctate a Internet para explorar los juegos.")
+                    }
+                }
+                uiState.gamesLoading -> {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                uiState.gamesError != null -> {
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text("No se pudo cargar el catálogo de juegos")
+                        Spacer(Modifier.height(8.dp))
+                        Text(uiState.gamesError, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(12.dp))
+                        Button(onClick = onSearchSubmit) { Text("Reintentar") }
+                    }
+                }
+                uiState.games.isEmpty() -> {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("No hay juegos para esa búsqueda todavía.")
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(uiState.games, key = { it.id }) { game ->
+                            val libraryId = "lbg-${game.id}"
+                            OnlineCatalogGameRow(
+                                game = game,
+                                isDownloaded = uiState.downloadedLibraryIds.contains(libraryId),
+                                isDownloading = uiState.downloadingGameIds.contains(game.id),
+                                onDownload = { onDownloadGame(game) },
+                                onOpen = { onOpenDownloadedGame(libraryId) }
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            when (val state = uiState.loadState) {
             CatalogLoadState.Loading -> {
                 Box(
                     modifier = Modifier
@@ -341,6 +417,7 @@ fun DiscoverScreen(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -498,6 +575,88 @@ private fun OnlineCatalogBookRow(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("EPUB", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun OnlineCatalogGameRow(
+    game: SupabaseCatalogItem,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onDownload: () -> Unit,
+    onOpen: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                0.75.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                RoundedCornerShape(18.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = game.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (game.description.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = game.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "HTML5 · ${game.languageCode?.uppercase() ?: "Juego"} · ${game.downloadCount} descargas",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            if (isDownloaded) {
+                OutlinedButton(
+                    onClick = onOpen,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Jugar", style = MaterialTheme.typography.labelMedium)
+                }
+            } else {
+                Button(
+                    onClick = onDownload,
+                    enabled = !isDownloading,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Descargar", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

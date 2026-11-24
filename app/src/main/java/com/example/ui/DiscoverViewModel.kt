@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.BookEntity
 import com.example.data.BookRepository
 import com.example.data.GutendexBook
+import com.example.data.SupabaseCatalogItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,34 @@ data class DiscoverUiState(
     val loadState: CatalogLoadState = CatalogLoadState.Loading,
     val downloadingIds: Set<Int> = emptySet(),
     val downloadedLibraryIds: Set<String> = emptySet(),
-    val downloadFeedback: String? = null
+    val downloadFeedback: String? = null,
+    val selectedCatalogSection: String = "books",
+    val games: List<SupabaseCatalogItem> = emptyList(),
+    val gamesLoading: Boolean = false,
+    val gamesError: String? = null,
+    val downloadingGameIds: Set<Long> = emptySet()
+)
+
+private data class CatalogBaseState(
+    val online: Boolean,
+    val libraryBooks: List<BookEntity>,
+    val query: String,
+    val language: String,
+    val topic: String,
+    val loadState: CatalogLoadState
+)
+
+private data class CatalogDownloadState(
+    val bookIds: Set<Int>,
+    val feedback: String?
+)
+
+private data class CatalogGameState(
+    val games: List<SupabaseCatalogItem>,
+    val loading: Boolean,
+    val error: String?,
+    val downloadingIds: Set<Long>,
+    val selectedSection: String
 )
 
 class DiscoverViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,35 +66,66 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
     private val searchQuery = MutableStateFlow("")
     private val selectedLanguage = MutableStateFlow("es")
     private val selectedTopic = MutableStateFlow("")
+    private val selectedCatalogSection = MutableStateFlow("books")
     private val loadState = MutableStateFlow<CatalogLoadState>(CatalogLoadState.Loading)
     private val downloadingIds = MutableStateFlow<Set<Int>>(emptySet())
     private val downloadFeedback = MutableStateFlow<String?>(null)
+    private val games = MutableStateFlow<List<SupabaseCatalogItem>>(emptyList())
+    private val gamesLoading = MutableStateFlow(false)
+    private val gamesError = MutableStateFlow<String?>(null)
+    private val downloadingGameIds = MutableStateFlow<Set<Long>>(emptySet())
 
     private val queryParams = combine(searchQuery, selectedLanguage, selectedTopic) { q, lang, topic ->
         Triple(q, lang, topic)
     }
 
-    val uiState: StateFlow<DiscoverUiState> = combine(
+    private val baseState = combine(
         repository.networkMonitor.isOnlineFlow,
         repository.allBooks,
         queryParams,
-        loadState,
-        combine(downloadingIds, downloadFeedback) { d, f -> d to f }
-    ) { online, libraryBooks, (q, lang, topic), state, (downloading, feedback) ->
-        val effectiveState = if (!online && state is CatalogLoadState.Loading) {
+        loadState
+    ) { online, libraryBooks, params, state ->
+        CatalogBaseState(online, libraryBooks, params.first, params.second, params.third, state)
+    }
+
+    private val downloadState = combine(downloadingIds, downloadFeedback) { ids, feedback ->
+        CatalogDownloadState(ids, feedback)
+    }
+
+    private val gameState = combine(
+        games,
+        gamesLoading,
+        gamesError,
+        downloadingGameIds,
+        selectedCatalogSection
+    ) { items, loading, error, downloading, section ->
+        CatalogGameState(items, loading, error, downloading, section)
+    }
+
+    val uiState: StateFlow<DiscoverUiState> = combine(
+        baseState,
+        downloadState,
+        gameState
+    ) { base, downloads, gameCatalog ->
+        val effectiveState = if (!base.online && base.loadState is CatalogLoadState.Loading) {
             CatalogLoadState.Offline
         } else {
-            state
+            base.loadState
         }
         DiscoverUiState(
-            isOnline = online,
-            searchQuery = q,
-            selectedLanguage = lang,
-            selectedTopic = topic,
+            isOnline = base.online,
+            searchQuery = base.query,
+            selectedLanguage = base.language,
+            selectedTopic = base.topic,
             loadState = effectiveState,
-            downloadingIds = downloading,
-            downloadedLibraryIds = libraryBooks.map { it.id }.toSet(),
-            downloadFeedback = feedback
+            downloadingIds = downloads.bookIds,
+            downloadedLibraryIds = base.libraryBooks.map { it.id }.toSet(),
+            downloadFeedback = downloads.feedback,
+            selectedCatalogSection = gameCatalog.selectedSection,
+            games = gameCatalog.games,
+            gamesLoading = gameCatalog.loading,
+            gamesError = gameCatalog.error,
+            downloadingGameIds = gameCatalog.downloadingIds
         )
     }.stateIn(
         scope = viewModelScope,
@@ -80,6 +139,10 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
 
     fun setSearchQuery(query: String) {
         searchQuery.value = query
+    }
+
+    fun setCatalogSection(section: String) {
+        selectedCatalogSection.value = if (section == "games") "games" else "books"
     }
 
     fun setLanguage(langCode: String) {
@@ -96,9 +159,14 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             if (!repository.networkMonitor.isCurrentlyOnline()) {
                 loadState.value = CatalogLoadState.Offline
+                gamesError.value = "El catálogo de juegos necesita conexión a Internet."
                 return@launch
             }
+
             loadState.value = CatalogLoadState.Loading
+            gamesLoading.value = true
+            gamesError.value = null
+
             try {
                 val results = repository.searchOnlineCatalog(
                     query = searchQuery.value,
@@ -107,13 +175,21 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 )
                 loadState.value = CatalogLoadState.Success(results)
             } catch (e: Exception) {
-                if (!repository.networkMonitor.isCurrentlyOnline()) {
-                    loadState.value = CatalogLoadState.Offline
+                loadState.value = if (!repository.networkMonitor.isCurrentlyOnline()) {
+                    CatalogLoadState.Offline
                 } else {
-                    loadState.value = CatalogLoadState.Error(
-                        e.localizedMessage ?: "No se pudo cargar el catálogo en línea."
+                    CatalogLoadState.Error(
+                        e.localizedMessage ?: "No se pudo cargar el catálogo de libros."
                     )
                 }
+            }
+
+            try {
+                games.value = repository.searchOnlineGames(searchQuery.value)
+            } catch (e: Exception) {
+                gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
+            } finally {
+                gamesLoading.value = false
             }
         }
     }
@@ -131,6 +207,23 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                 downloadFeedback.value = "Error al descargar: ${e.localizedMessage ?: "revisa tu conexión"}"
             } finally {
                 downloadingIds.value = downloadingIds.value - book.id
+            }
+        }
+    }
+
+    fun downloadGame(item: SupabaseCatalogItem, onDownloaded: (BookEntity) -> Unit = {}) {
+        if (downloadingGameIds.value.contains(item.id)) return
+        viewModelScope.launch {
+            downloadingGameIds.value = downloadingGameIds.value + item.id
+            downloadFeedback.value = null
+            try {
+                val saved = repository.downloadOnlineGame(item)
+                downloadFeedback.value = "Juego guardado para jugar sin conexión: ${saved.title}"
+                onDownloaded(saved)
+            } catch (e: Exception) {
+                downloadFeedback.value = "Error al descargar el juego: ${e.localizedMessage ?: "revisa tu conexión"}"
+            } finally {
+                downloadingGameIds.value = downloadingGameIds.value - item.id
             }
         }
     }

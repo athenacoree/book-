@@ -165,7 +165,7 @@ class OnlineCatalogService {
         val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
         api.fetchPublishedItems(
             apiKey = apiKey,
-            authorization = "Bearer $apiKey",
+            authorization = "Bearer $anonKey",
             itemType = "eq.game",
             title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
         )
@@ -201,10 +201,22 @@ class OnlineCatalogService {
     }
 
     private fun publicStorageUrl(path: String): String {
-        val encodedPath = path.split("/")
+        val candidate = path.trim()
+        if (candidate.startsWith("https://", ignoreCase = true)) {
+            val uri = Uri.parse(candidate)
+            val host = uri.host?.lowercase()
+            require(uri.scheme.equals("https", ignoreCase = true) &&
+                uri.userInfo == null && uri.port == -1 &&
+                host in setOf("www.gutenberg.org", "raw.githubusercontent.com")) {
+                "La fuente externa del catálogo no está permitida"
+            }
+            return candidate
+        }
+
+        val encodedPath = candidate.split("/")
             .filter { it.isNotBlank() }
             .joinToString("/") { Uri.encode(it) }
-        require(encodedPath.isNotBlank() && !path.startsWith("/") && !path.split("/").any { it == ".." }) {
+        require(encodedPath.isNotBlank() && !candidate.startsWith("/") && !candidate.split("/").any { it == ".." }) {
             "Ruta de almacenamiento no válida"
         }
         return "${baseUrl}storage/v1/object/public/luminabook-assets/$encodedPath"
