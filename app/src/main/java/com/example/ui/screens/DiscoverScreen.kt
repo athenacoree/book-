@@ -456,7 +456,7 @@ private fun OnlineCatalogBookRow(
     sensorTiltX: Float,
     sensorTiltY: Float,
     isDownloaded: Boolean,
-    installedVersion: String?,
+    installedVersion: String? = null,
     isDownloading: Boolean,
     onDownload: () -> Unit,
     onOpen: () -> Unit
