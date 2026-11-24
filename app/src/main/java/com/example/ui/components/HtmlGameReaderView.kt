@@ -132,12 +132,14 @@ private const val VIRTUAL_ORIGIN = "https://luminabook.local/"
 private fun hardenGameHtml(rawHtml: String): String {
     val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
     val headPattern = Regex("(?i)<head(?:\\s[^>]*)?>")
-    if (headPattern.containsMatchIn(rawHtml)) {
-        return headPattern.replaceFirst(rawHtml) { it.value + policy }
+    val headMatch = headPattern.find(rawHtml)
+    if (headMatch != null) {
+        return rawHtml.replaceRange(headMatch.range, headMatch.value + policy)
     }
     val htmlPattern = Regex("(?i)<html(?:\\s[^>]*)?>")
-    return if (htmlPattern.containsMatchIn(rawHtml)) {
-        htmlPattern.replaceFirst(rawHtml) { it.value + "<head>$policy</head>" }
+    val htmlMatch = htmlPattern.find(rawHtml)
+    return if (htmlMatch != null) {
+        rawHtml.replaceRange(htmlMatch.range, htmlMatch.value + "<head>$policy</head>")
     } else {
         "<!doctype html><html><head>$policy</head><body>$rawHtml</body></html>"
     }
