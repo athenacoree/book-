@@ -516,7 +516,7 @@ fun HtmlGameReaderView(
                             allowUniversalAccessFromFileURLs = false
                             javaScriptCanOpenWindowsAutomatically = false
                             databaseEnabled = false
-                            supportMultipleWindows = false
+                            setSupportMultipleWindows(false)
                             cacheMode = WebSettings.LOAD_DEFAULT
                             mediaPlaybackRequiresUserGesture = false
                             useWideViewPort = true
