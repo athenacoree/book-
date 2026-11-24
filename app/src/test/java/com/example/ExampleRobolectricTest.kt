@@ -42,17 +42,22 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `seed starter html game produces playable html file`() {
+  fun `downloaded html game is saved as a playable local file`() = kotlinx.coroutines.runBlocking {
     val context = ApplicationProvider.getApplicationContext<Context>()
     val converter = UniversalBookConverter(context)
-    val result = converter.seedStarterHtmlGame()
+    val html = """<!doctype html><html lang="es"><head><title>Mini Juego</title></head><body><canvas id="game"></canvas></body></html>"""
+    val result = converter.saveDownloadedHtmlGame(
+      bookId = "test-starter-html-game",
+      title = "Mini Juego",
+      author = "LuminaBook",
+      htmlBytes = html.toByteArray(Charsets.UTF_8)
+    )
 
     assertEquals(BookFormat.HTML, result.originalFormat)
     val htmlFile = File(result.originalPath!!)
-    assertTrue(htmlFile.exists())
-    val content = htmlFile.readText(Charsets.UTF_8)
-    assertTrue(content.contains("<canvas"))
-    assertTrue(content.contains("Notification"))
+    assertTrue(htmlFile.isFile)
+    val savedHtml = htmlFile.readText(Charsets.UTF_8)
+    assertTrue(savedHtml.contains("<canvas"))
   }
 
   @Test
