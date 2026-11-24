@@ -130,21 +130,23 @@ import kotlin.math.roundToInt
 
 private const val VIRTUAL_ORIGIN = "https://luminabook.local/"
 private fun hardenGameHtml(rawHtml: String): String {
+    // Remove game-supplied CSP first: multiple policies are intersected,
+    // so an older connect-src self-only policy would still block GitHub.
+    val withoutGameCsp = Regex("""(?is)<meta\b(?=[^>]*http-equiv\s*=\s*["\x27]?Content-Security-Policy["\x27]?)[^>]*>""").replace(rawHtml, "")
     val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://raw.githubusercontent.com; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
     val headPattern = Regex("(?i)<head(?:\\s[^>]*)?>")
-    val headMatch = headPattern.find(rawHtml)
+    val headMatch = headPattern.find(withoutGameCsp)
     if (headMatch != null) {
-        return rawHtml.replaceRange(headMatch.range, headMatch.value + policy)
+        return withoutGameCsp.replaceRange(headMatch.range, headMatch.value + policy)
     }
     val htmlPattern = Regex("(?i)<html(?:\\s[^>]*)?>")
-    val htmlMatch = htmlPattern.find(rawHtml)
+    val htmlMatch = htmlPattern.find(withoutGameCsp)
     return if (htmlMatch != null) {
-        rawHtml.replaceRange(htmlMatch.range, htmlMatch.value + "<head>$policy</head>")
+        withoutGameCsp.replaceRange(htmlMatch.range, htmlMatch.value + "<head>$policy</head>")
     } else {
-        "<!doctype html><html><head>$policy</head><body>$rawHtml</body></html>"
+        "<!doctype html><html><head>$policy</head><body>$withoutGameCsp</body></html>"
     }
 }
-
 
 data class HtmlInAppNotification(
     val id: Long,
