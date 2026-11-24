@@ -3,6 +3,7 @@ package com.example.engine
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.net.URLDecoder
@@ -13,6 +14,9 @@ import java.util.zip.ZipFile
  * (including inline images extracted in their exact reading position).
  */
 object EpubParser {
+
+    // Prevent oversized or highly-compressed ZIP entries from exhausting app memory.
+    private const val MAX_ARCHIVE_ENTRY_BYTES = 32L * 1024L * 1024L
 
     fun parse(epubFile: File, imageCacheDir: File? = null): ParsedEpub {
         val resolvedImageDir = imageCacheDir?.apply { mkdirs() }
@@ -71,7 +75,8 @@ object EpubParser {
                     .sortedBy { it.name }
                     .toList()
                 htmlEntries.forEach { entry ->
-                    val html = zip.getInputStream(entry).readBytes().toString(Charsets.UTF_8)
+                    val htmlBytes = readEntryBytes(zip, entry.name) ?: return@forEach
+                    val html = htmlBytes.toString(Charsets.UTF_8)
                     val chapterBaseDir = entry.name.substringBeforeLast('/', "")
                     val (extractedTitle, blocks) = parseXhtmlBlocks(
                         html = html,
@@ -432,7 +437,8 @@ object EpubParser {
         val entry = zip.getEntry(path)
             ?: zip.entries().asSequence().firstOrNull { it.name.equals(path, ignoreCase = true) }
             ?: return null
-        return zip.getInputStream(entry).use { it.readBytes() }
+        if (entry.isDirectory || entry.size > MAX_ARCHIVE_ENTRY_BYTES) return null
+        return zip.getInputStream(entry).use { readBounded(it) }
     }
 
     private fun readEntryBytesByFilename(zip: ZipFile, fileName: String): ByteArray? {
@@ -440,6 +446,21 @@ object EpubParser {
         val entry = zip.entries().asSequence()
             .firstOrNull { !it.isDirectory && it.name.substringAfterLast('/').equals(fileName, ignoreCase = true) }
             ?: return null
-        return zip.getInputStream(entry).use { it.readBytes() }
+        if (entry.size > MAX_ARCHIVE_ENTRY_BYTES) return null
+        return zip.getInputStream(entry).use { readBounded(it) }
+    }
+
+    private fun readBounded(input: InputStream): ByteArray? {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var totalBytes = 0L
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            totalBytes += read
+            if (totalBytes > MAX_ARCHIVE_ENTRY_BYTES) return null
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray()
     }
 }
