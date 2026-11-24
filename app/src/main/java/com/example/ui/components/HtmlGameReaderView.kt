@@ -130,7 +130,7 @@ import kotlin.math.roundToInt
 
 private const val VIRTUAL_ORIGIN = "https://luminabook.local/"
 private fun hardenGameHtml(rawHtml: String): String {
-    val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
+    val policy = """<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' https://raw.githubusercontent.com; frame-src 'none'; child-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'">"""
     val headPattern = Regex("(?i)<head(?:\\s[^>]*)?>")
     val headMatch = headPattern.find(rawHtml)
     if (headMatch != null) {
