@@ -307,6 +307,7 @@ fun DiscoverScreen(
                             OnlineCatalogGameRow(
                                 game = game,
                                 isDownloaded = uiState.downloadedLibraryIds.contains(libraryId),
+                                installedVersion = uiState.installedGameVersions[game.id],
                                 isDownloading = uiState.downloadingGameIds.contains(game.id),
                                 onDownload = { onDownloadGame(game) },
                                 onOpen = { onOpenDownloadedGame(libraryId) }
@@ -453,6 +454,7 @@ private fun OnlineCatalogBookRow(
     sensorTiltX: Float,
     sensorTiltY: Float,
     isDownloaded: Boolean,
+    installedVersion: String?,
     isDownloading: Boolean,
     onDownload: () -> Unit,
     onOpen: () -> Unit
@@ -650,10 +652,28 @@ private fun OnlineCatalogGameRow(
                         overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.height(7.dp))
+                if (installedVersion != null && installedVersion != game.gameVersion) {
+                    Text("Actualización disponible · v${game.gameVersion}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold)
+                    if (game.releaseNotes.isNotBlank()) {
+                        Text(game.releaseNotes, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                            overflow = TextOverflow.Ellipsis)
+                    }
+                } else if (installedVersion != null) {
+                    Text("Instalado · v${installedVersion}", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary)
+                } else {
+                    Text("Versión ${game.gameVersion}", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(4.dp))
                 Text("${game.fileFormat.uppercase()} · ${game.languageCode?.uppercase() ?: "Juego"} · ${game.downloadCount} descargas",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
-                if (isDownloaded) {
+                if (isDownloaded && installedVersion == game.gameVersion) {
                     OutlinedButton(onClick = onOpen, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)) {
                         Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp)); Text("Jugar")
@@ -664,7 +684,7 @@ private fun OnlineCatalogGameRow(
                         if (isDownloading) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimary)
                         else Icon(Icons.Filled.Download, null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp)); Text(if (isDownloading) "Preparando" else "Instalar")
+                        Spacer(Modifier.width(4.dp)); Text(if (isDownloading) "Preparando" else if (isDownloaded) "Actualizar" else "Instalar")
                     }
                 }
             }
