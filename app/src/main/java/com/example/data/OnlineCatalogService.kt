@@ -83,13 +83,13 @@ data class SupabaseCatalogItem(
 
 private interface SupabaseCatalogApi {
     @GET("rest/v1/luminabook_catalog_items")
-    suspend fun fetchPublishedBooks(
+    suspend fun fetchPublishedItems(
         @Header("apikey") apiKey: String,
         @Header("Authorization") authorization: String,
         @Query("select") select: String = "id,slug,title,author,description,item_type,file_format,storage_path,cover_path,language_code,subjects,file_size_bytes,download_count",
         @Query("is_published") published: String = "eq.true",
-        @Query("item_type") itemType: String = "eq.book",
-        @Query("file_format") fileFormat: String = "eq.epub",
+        @Query("item_type") itemType: String,
+        @Query("file_format") fileFormat: String? = null,
         @Query("title") title: String? = null,
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 50
@@ -127,10 +127,12 @@ class OnlineCatalogService {
     ): List<GutendexBook> = withContext(Dispatchers.IO) {
         requireConfiguration()
         val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
-        val items = api.fetchPublishedBooks(
+        val items = api.fetchPublishedItems(
             apiKey = apiKey,
             authorization = "Bearer $apiKey",
-            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ")}*" }
+            itemType = "eq.book",
+            fileFormat = "eq.epub",
+            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
         )
         items.asSequence()
             .filter { languageCode.isNullOrBlank() || it.languageCode.equals(languageCode, ignoreCase = true) }
@@ -155,6 +157,20 @@ class OnlineCatalogService {
             }
             .toList()
     }
+
+
+    suspend fun fetchGames(query: String? = null): List<SupabaseCatalogItem> = withContext(Dispatchers.IO) {
+        requireConfiguration()
+        val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
+        api.fetchPublishedItems(
+            apiKey = apiKey,
+            authorization = "Bearer $apiKey",
+            itemType = "eq.game",
+            title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
+        )
+    }
+
+    suspend fun downloadCatalogAsset(path: String): ByteArray = downloadBytes(publicStorageUrl(path))
 
     suspend fun downloadBytes(url: String): ByteArray = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url).get().build()
