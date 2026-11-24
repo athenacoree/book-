@@ -99,6 +99,7 @@ private interface SupabaseCatalogApi {
 class OnlineCatalogService {
     private val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/"
     private val apiKey = BuildConfig.SUPABASE_PUBLISHABLE_KEY.trim()
+    private val anonKey = BuildConfig.SUPABASE_ANON_KEY.trim()
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS)
@@ -129,7 +130,7 @@ class OnlineCatalogService {
         val normalizedQuery = query?.trim()?.takeIf { it.isNotEmpty() }
         val items = api.fetchPublishedItems(
             apiKey = apiKey,
-            authorization = "Bearer $apiKey",
+            authorization = "Bearer $anonKey",
             itemType = "eq.book",
             fileFormat = "eq.epub",
             title = normalizedQuery?.let { "ilike.*${it.replace("*", "").replace(",", " ") }*" }
@@ -210,7 +211,7 @@ class OnlineCatalogService {
     }
 
     private fun requireConfiguration() {
-        require(BuildConfig.SUPABASE_URL.isNotBlank() && apiKey.isNotBlank()) {
+        require(BuildConfig.SUPABASE_URL.isNotBlank() && apiKey.isNotBlank() && anonKey.isNotBlank()) {
             "Falta configurar SUPABASE_URL y SUPABASE_PUBLISHABLE_KEY en .env"
         }
     }
