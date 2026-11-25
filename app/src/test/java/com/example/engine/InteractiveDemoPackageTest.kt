@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -65,6 +66,66 @@ class InteractiveDemoPackageTest {
 
             assertNull(result)
             assertFalse(File(temp, "cache").exists())
+        } finally {
+            temp.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun epubParserPlacesDemoAtMarkerAndRecognizesNamespacedManifestProperty() {
+        val temp = Files.createTempDirectory("gitbook-demo-parser-test").toFile()
+        try {
+            val epub = File(temp, "book.epub")
+            writeZip(
+                epub,
+                linkedMapOf(
+                    "mimetype" to "application/epub+zip",
+                    "META-INF/container.xml" to """
+                        <?xml version="1.0"?>
+                        <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                          <rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles>
+                        </container>
+                    """.trimIndent(),
+                    "OEBPS/content.opf" to """
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <package xmlns="http://www.idpf.org/2007/opf"
+                            xmlns:dc="http://purl.org/dc/elements/1.1/"
+                            version="3.0"
+                            prefix="gitbook: https://gitbook.app/ns/epub#">
+                          <metadata><dc:title>Libro de prueba</dc:title></metadata>
+                          <manifest>
+                            <item id="chapter-1" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+                            <item id="demo-login" href="interactive/login/index.html"
+                                media-type="text/html" properties="gitbook:interactive"/>
+                          </manifest>
+                          <spine><itemref idref="chapter-1"/></spine>
+                        </package>
+                    """.trimIndent(),
+                    "OEBPS/chapter.xhtml" to """
+                        <html xmlns="http://www.w3.org/1999/xhtml">
+                          <head><title>Capítulo de prueba</title></head>
+                          <body>
+                            <p>Texto anterior.</p>
+                            <div data-gitbook-demo="login" data-gitbook-title="Prueba el formulario"></div>
+                            <p>Texto posterior.</p>
+                          </body>
+                        </html>
+                    """.trimIndent(),
+                    "OEBPS/interactive/login/index.html" to "<html><body>Demo</body></html>"
+                )
+            )
+
+            val parsed = EpubParser.parse(epub, File(temp, "book-cache"))
+            val blocks = parsed.chapters.single().blocks
+
+            assertEquals(3, blocks.size)
+            assertEquals("Texto anterior.", (blocks[0] as ReaderBlock.Paragraph).text)
+            val demo = blocks[1] as ReaderBlock.InteractiveDemo
+            assertEquals("login", demo.id)
+            assertEquals("Prueba el formulario", demo.title)
+            assertEquals("OEBPS/interactive/login/index.html", demo.entryPath)
+            assertEquals("Texto posterior.", (blocks[2] as ReaderBlock.Paragraph).text)
+            assertTrue(demo.cacheDirPath.isNotBlank())
         } finally {
             temp.deleteRecursively()
         }
