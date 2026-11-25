@@ -513,6 +513,15 @@ fun BookOpening3DOverlay(
                 }
             }
 
+            if (previewPages.isNotEmpty() && previewPageIndex == -1) {
+                Text(
+                    text = "Desliza sobre la portada para hojear las páginas",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+            }
+
             // Full Extracted Metadata & Interactive Genre Panel
             val promptAlpha = if (!isExpanding) e else (1f - o * 5f).coerceIn(0f, 1f)
             if (promptAlpha > 0.01f) {
