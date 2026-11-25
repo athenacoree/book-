@@ -154,6 +154,26 @@ class EpubEngineTest {
     }
 
     @Test
+    fun interactiveDemoPackageAllowsHttpsOnlyWhenNetworkCapabilityIsDeclared() = runTest {
+        val epubFile = tempFolder.newFile("interactive_network.epub")
+        val cacheDir = tempFolder.newFolder("demo_network_cache")
+        createInteractiveDemoEpub(epubFile)
+
+        val extracted = InteractiveDemoPackage.extract(
+            sourceEpub = epubFile,
+            entryPath = "OEBPS/interactive/login/index.html",
+            cacheDir = cacheDir,
+            demoId = "login",
+            permissions = setOf("network")
+        )
+
+        assertNotNull(extracted)
+        val html = extracted!!.entryFile.readText()
+        assertTrue(html.contains("connect-src https:"))
+        assertTrue(html.contains("frame-src https:"))
+    }
+
+    @Test
     fun interactiveDemoPackageExtractsOnlyTheVisibleDemosFolder() = runTest {
         val epubFile = tempFolder.newFile("interactive_extract.epub")
         val cacheDir = tempFolder.newFolder("demo_extract_cache")
