@@ -442,14 +442,14 @@ fun BookOpening3DOverlay(
                         Text(
                             text = book.title,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (book.isHtmlGame) Color(0xFFFAF6F0) else Color(0xFF1C1917),
+                            color = if (book.isHtmlGame) Color(0xFFFAF6F0) else MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (book.isHtmlGame) "Juego HTML · Pantalla completa" else book.author,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (book.isHtmlGame) Color(0xFFFDE68A) else Color(0xFF6B6258),
+                            color = if (book.isHtmlGame) Color(0xFFFDE68A) else MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -602,7 +602,7 @@ fun BookOpening3DOverlay(
                                         Text(
                                             text = "Idioma: ${book.language}",
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = Color(0xFFFAF6F0)
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
                                 }
