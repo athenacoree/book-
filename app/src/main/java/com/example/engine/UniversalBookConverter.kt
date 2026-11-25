@@ -153,18 +153,18 @@ class UniversalBookConverter(private val context: Context) {
 
             BookFormat.FB2 -> {
                 onProgress(ConversionProgress(displayName, format, "Analizando estructura FictionBook (FB2)…", 0.45f))
-                val (fbTitle, fbAuthor, chapters) = parseFb2(inputBytes.toString(Charsets.UTF_8), baseTitle)
-                finalTitle = fbTitle
-                finalAuthor = fbAuthor
-                totalChapters = chapters.size
+                val fb2 = parseFb2(inputBytes.toString(Charsets.UTF_8), baseTitle)
+                finalTitle = fb2.title
+                finalAuthor = fb2.author
+                totalChapters = fb2.chapters.size
 
-                onProgress(ConversionProgress(displayName, format, "Generando EPUB…", 0.85f))
+                onProgress(ConversionProgress(displayName, format, "Generando EPUB con imágenes y recursos…", 0.85f))
                 EpubWriter.writeEpub(
                     outputFile = destEpub,
                     title = finalTitle,
                     author = finalAuthor,
-                    chapters = chapters,
-                    assets = chapters.flatMap { it.assets }
+                    chapters = fb2.chapters,
+                    assets = fb2.assets
                 )
             }
 
