@@ -407,6 +407,7 @@ fun ReaderScreen(
                     LiveLyricsStageView(
                         chapter = chapter,
                         totalChapters = epub.chapters.size,
+                        initialProgressIndex = currentPageIndex,
                         preferences = preferences,
                         colors = colors,
                         livePlaying = livePlaying,
@@ -2114,6 +2115,7 @@ private fun TopCenterLiveControlPill(
 private fun LiveLyricsStageView(
     chapter: EpubChapter,
     totalChapters: Int,
+    initialProgressIndex: Int,
     preferences: ReaderPreferences,
     colors: ReaderColors,
     livePlaying: Boolean,
@@ -2148,7 +2150,9 @@ private fun LiveLyricsStageView(
         all
     }
 
-    var activeIdx by remember(chapter.index, liveResetSignal) { mutableIntStateOf(0) }
+    var activeIdx by remember(chapter.index, liveResetSignal) {
+        mutableIntStateOf(initialProgressIndex.coerceIn(0, (phrases.size - 1).coerceAtLeast(0)))
+    }
 
     LaunchedEffect(activeIdx, phrases.size) {
         if (phrases.isNotEmpty()) {
