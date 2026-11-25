@@ -1,6 +1,10 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -17,6 +21,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +78,26 @@ fun InteractiveBookDemoView(
         }
     }
     val extractedBundle = extractionState.second
+    val context = LocalContext.current
+    val pendingDeviceRequest = remember(demo.id) { mutableStateOf<PermissionRequest?>(null) }
+    val devicePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        val request = pendingDeviceRequest.value ?: return@rememberLauncherForActivityResult
+        val allowed = request.resources.all { resource ->
+            when (resource) {
+                PermissionRequest.RESOURCE_AUDIO_CAPTURE ->
+                    "microphone" in demo.permissions &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                PermissionRequest.RESOURCE_VIDEO_CAPTURE ->
+                    "camera" in demo.permissions &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                else -> false
+            }
+        }
+        if (allowed) request.grant(request.resources) else request.deny()
+        pendingDeviceRequest.value = null
+    }
     val virtualHost = remember(demo.sourceEpubPath, demo.id) {
         "demo-${(demo.sourceEpubPath + "|" + demo.id).hashCode().toUInt()}.gitbook.local"
     }
@@ -161,6 +189,45 @@ fun InteractiveBookDemoView(
                                 if (status == 404) "Not found" else "Blocked by GITBOOK",
                                 emptyMap(), ByteArrayInputStream(ByteArray(0))
                             )
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onPermissionRequest(request: PermissionRequest) {
+                                    val androidPermissions = mutableListOf<String>()
+                                    val declared = request.resources.all { resource ->
+                                        when (resource) {
+                                            PermissionRequest.RESOURCE_AUDIO_CAPTURE -> {
+                                                if ("microphone" in demo.permissions) {
+                                                    androidPermissions.add(Manifest.permission.RECORD_AUDIO)
+                                                    true
+                                                } else false
+                                            }
+                                            PermissionRequest.RESOURCE_VIDEO_CAPTURE -> {
+                                                if ("camera" in demo.permissions) {
+                                                    androidPermissions.add(Manifest.permission.CAMERA)
+                                                    true
+                                                } else false
+                                            }
+                                            else -> false
+                                        }
+                                    }
+                                    if (!declared || androidPermissions.isEmpty()) {
+                                        request.deny()
+                                        return
+                                    }
+                                    val missing = androidPermissions.distinct().filter {
+                                        ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+                                    }
+                                    if (missing.isEmpty()) {
+                                        request.grant(request.resources)
+                                    } else {
+                                        pendingDeviceRequest.value = request
+                                        devicePermissionLauncher.launch(missing.toTypedArray())
+                                    }
+                                }
+
+                                override fun onPermissionRequestCanceled(request: PermissionRequest) {
+                                    if (pendingDeviceRequest.value == request) pendingDeviceRequest.value = null
+                                }
+                            }
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView,
