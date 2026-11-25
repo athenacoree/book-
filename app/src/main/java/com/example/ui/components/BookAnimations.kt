@@ -94,6 +94,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import com.example.engine.EpubParser
+import com.example.engine.ReaderBlock
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -288,6 +294,27 @@ fun BookOpening3DOverlay(
     var showGenreEditor by remember(book.id) { mutableStateOf(false) }
     var localGenre by remember(book.id, book.genre) { mutableStateOf(book.genre) }
     var expandDescription by remember(book.id) { mutableStateOf(false) }
+    var previewPageIndex by remember(book.id) { mutableStateOf(-1) }
+    var previewPages by remember(book.id) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(book.id, book.epubPath) {
+        previewPageIndex = -1
+        previewPages = withContext(Dispatchers.IO) {
+            if (book.isHtmlGame) emptyList() else runCatching {
+                val parsed = EpubParser.parse(File(book.epubPath))
+                val text = parsed.chapters.flatMap { chapter ->
+                    chapter.blocks.mapNotNull { block ->
+                        when (block) {
+                            is ReaderBlock.Heading -> block.text
+                            is ReaderBlock.Paragraph -> block.text
+                            is ReaderBlock.Quote -> block.text
+                            else -> null
+                        }
+                    }
+                }.joinToString("\n\n")
+                text.chunked(720).map { it.trim() }.filter { it.isNotBlank() }.take(80)
+            }.getOrDefault(emptyList())
+        }
+    }
     val entryProgress = remember(book.id) { Animatable(0f) }
     val openProgress = remember(book.id) { Animatable(0f) }
 
@@ -334,7 +361,7 @@ fun BookOpening3DOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF13110F))
+            .background(MaterialTheme.colorScheme.background)
             .clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
@@ -347,7 +374,7 @@ fun BookOpening3DOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFFFAF6F0).copy(alpha = fullPaperRevealAlpha))
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = fullPaperRevealAlpha))
             )
         }
 
@@ -365,6 +392,18 @@ fun BookOpening3DOverlay(
                 modifier = Modifier
                     .width(176.dp)
                     .height(254.dp)
+                    .pointerInput(book.id, previewPages.size) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            change.consume()
+                            if (kotlin.math.abs(dragAmount) > 12f && previewPages.isNotEmpty()) {
+                                previewPageIndex = if (dragAmount < 0f) {
+                                    (previewPageIndex + 1).coerceAtMost(previewPages.lastIndex)
+                                } else {
+                                    (previewPageIndex - 1).coerceAtLeast(-1)
+                                }
+                            }
+                        }
+                    }
                     .graphicsLayer {
                         scaleX = cardScale
                         scaleY = cardScale
@@ -379,7 +418,7 @@ fun BookOpening3DOverlay(
                     }
             ) {
                 Surface(
-                    color = if (book.isHtmlGame) Color(0xFF171B26) else Color(0xFFFAF6F0),
+                    color = if (book.isHtmlGame) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(topEnd = 14.dp, bottomEnd = 14.dp, topStart = 4.dp, bottomStart = 4.dp),
                     shadowElevation = 14.dp,
                     modifier = Modifier.fillMaxSize()
@@ -416,7 +455,34 @@ fun BookOpening3DOverlay(
                     }
                 }
 
-                if (coverFrontAlpha > 0.01f) {
+                if (previewPageIndex >= 0 && previewPageIndex < previewPages.size) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface).padding(13.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Text(
+                            text = book.title,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 2
+                        )
+                        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(
+                            text = previewPages[previewPageIndex],
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelSmall,
+                            lineHeight = 14.sp,
+                            maxLines = 13,
+                            overflow = TextOverflow.Clip
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "Página " + (previewPageIndex + 1) + " de " + previewPages.size + " · desliza para hojear",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                } else if (coverFrontAlpha > 0.01f) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -482,7 +548,7 @@ fun BookOpening3DOverlay(
                     Text(
                         text = book.title,
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFFFAF6F0),
+                        color = MaterialTheme.colorScheme.onBackground,
                         textAlign = TextAlign.Center,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -491,7 +557,7 @@ fun BookOpening3DOverlay(
                     Text(
                         text = book.author,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFD6CEC2),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
 
@@ -499,11 +565,11 @@ fun BookOpening3DOverlay(
 
                     // Glass Metadata Sheet
                     Surface(
-                        color = Color(0xFF231E1A).copy(alpha = 0.88f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                         shape = RoundedCornerShape(18.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(0.75.dp, Color(0xFFFAF6F0).copy(alpha = 0.14f), RoundedCornerShape(18.dp))
+                            .border(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
                             .clickable(
                                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                 indication = null
@@ -519,7 +585,7 @@ fun BookOpening3DOverlay(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Surface(
-                                    color = Color(0xFF3E3125),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Row(
@@ -786,7 +852,7 @@ private fun PreviewStatBadge(label: String, value: String) {
         Text(
             text = value,
             style = MaterialTheme.typography.titleSmall,
-            color = Color(0xFFFAF6F0),
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold
         )
         Text(
