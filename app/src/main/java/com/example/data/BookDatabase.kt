@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, BookmarkEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class BookDatabase : RoomDatabase() {
@@ -54,6 +54,12 @@ abstract class BookDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN readerSettingsJson TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): BookDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -61,7 +67,7 @@ abstract class BookDatabase : RoomDatabase() {
                     BookDatabase::class.java,
                     "luminabook_offline.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     .build()
                     .also { INSTANCE = it }

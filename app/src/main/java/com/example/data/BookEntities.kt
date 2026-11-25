@@ -35,7 +35,8 @@ data class BookEntity(
     val gameBestRecord: String = "",
     @ColumnInfo(defaultValue = "''") val gameVersion: String = "",
     val catalogGameId: Long? = null,
-    @ColumnInfo(defaultValue = "'index.html'") val gamePackageEntry: String = "index.html"
+    @ColumnInfo(defaultValue = "'index.html'") val gamePackageEntry: String = "index.html",
+    val readerSettingsJson: String = ""
 )
 
 @Entity(tableName = "bookmarks", indices = [Index(value = ["bookId", "createdAt"])])

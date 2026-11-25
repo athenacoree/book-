@@ -41,6 +41,8 @@ class BookRepository(context: Context) {
 
     suspend fun getBookById(bookId: String): BookEntity? = dao.getBookById(bookId)
 
+    suspend fun saveReaderSettings(bookId: String, settingsJson: String) = dao.updateReaderSettings(bookId, settingsJson)
+
     suspend fun loadParsedEpub(book: BookEntity): ParsedEpub = withContext(Dispatchers.IO) {
         val sourceFile = File(book.epubPath)
         require(sourceFile.isFile && sourceFile.canRead()) { "El archivo del libro no está disponible" }

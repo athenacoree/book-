@@ -73,6 +73,9 @@ interface BookDao {
         lastRead: Long
     )
 
+    @Query("UPDATE books SET readerSettingsJson = :settingsJson WHERE id = :bookId")
+    suspend fun updateReaderSettings(bookId: String, settingsJson: String)
+
     @Query("DELETE FROM books WHERE id = :bookId")
     suspend fun deleteBookById(bookId: String)
 
