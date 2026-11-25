@@ -63,6 +63,7 @@ import com.example.ui.components.shareEpubFile
 fun ConverterScreen(
     uiState: LibraryUiState,
     onPickFileToConvert: () -> Unit,
+    onPickFolderToConvert: () -> Unit,
     onOpenBook: (BookEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -238,6 +239,22 @@ fun ConverterScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onPickFolderToConvert,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth().height(50.dp)
+                    ) {
+                        Icon(Icons.Filled.FileOpen, contentDescription = null)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Explorar una carpeta completa")
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "Puedes conceder acceso a una carpeta; GITBOOK buscará dentro de ella libros compatibles. Android solo permite leer las carpetas que autorices.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Button(
                         onClick = onPickFileToConvert,
                         shape = RoundedCornerShape(14.dp),

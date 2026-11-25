@@ -2,6 +2,10 @@ package com.example
 
 import android.content.Intent
 import android.net.Uri
+import android.content.Context
+import android.provider.DocumentsContract
+import android.provider.DocumentsContract.Document
+import android.database.Cursor
 import android.os.Bundle
 import android.os.Build
 import androidx.activity.ComponentActivity
@@ -69,6 +73,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -77,6 +82,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -149,12 +157,49 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+private fun collectBookUrisFromTree(context: Context, treeUri: Uri): List<Uri> {
+    val resolver = context.contentResolver
+    val accepted = setOf("epub", "pdf", "mobi", "azw", "prc", "fb2", "txt", "md", "html", "htm")
+    val found = linkedMapOf<String, Uri>()
+    val visited = hashSetOf<String>()
+    fun walk(documentId: String, depth: Int) {
+        if (depth > 12 || found.size >= 1500 || !visited.add(documentId)) return
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+        resolver.query(
+            childrenUri,
+            arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE),
+            null, null, null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndex(Document.COLUMN_DOCUMENT_ID)
+            val nameCol = cursor.getColumnIndex(Document.COLUMN_DISPLAY_NAME)
+            val mimeCol = cursor.getColumnIndex(Document.COLUMN_MIME_TYPE)
+            while (cursor.moveToNext() && found.size < 1500) {
+                val childId = cursor.getString(idCol)
+                val name = cursor.getString(nameCol).orEmpty()
+                val mime = cursor.getString(mimeCol).orEmpty()
+                if (mime == Document.MIME_TYPE_DIR) {
+                    walk(childId, depth + 1)
+                } else if (name.substringAfterLast('.', "").lowercase() in accepted) {
+                    val childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId)
+                    found[childUri.toString()] = childUri
+                }
+            }
+        }
+    }
+    val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+    walk(rootId, 0)
+    return found.values.toList()
+}
+
 @Composable
 fun LuminaBookApp(incomingFileUri: Uri? = null) {
     val navController = rememberNavController()
     val libraryViewModel: LibraryViewModel = viewModel()
     val discoverViewModel: DiscoverViewModel = viewModel()
     val readerViewModel: ReaderViewModel = viewModel()
+    val context = LocalContext.current
+    val importScope = androidx.compose.runtime.rememberCoroutineScope()
 
     val libraryState by libraryViewModel.uiState.collectAsStateWithLifecycle()
     val discoverState by discoverViewModel.uiState.collectAsStateWithLifecycle()
@@ -205,6 +250,24 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) libraryViewModel.importBooks(uris)
+    }
+
+    val folderImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        if (treeUri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            importScope.launch {
+                val bookUris = withContext(Dispatchers.IO) {
+                    collectBookUrisFromTree(context, treeUri)
+                }
+                if (bookUris.isNotEmpty()) libraryViewModel.importBooks(bookUris)
+            }
+        }
     }
 
     val supportedMimeTypes = arrayOf(
@@ -322,6 +385,9 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                             uiState = libraryState,
                             onPickFileToConvert = {
                                 converterImportLauncher.launch(supportedMimeTypes)
+                            },
+                            onPickFolderToConvert = {
+                                folderImportLauncher.launch(null)
                             },
                             onOpenBook = { book ->
                                 navController.navigate(Routes.reader(book.id))
