@@ -23,7 +23,8 @@ object InteractiveDemoPackage {
         sourceEpub: File,
         entryPath: String,
         cacheDir: File,
-        demoId: String
+        demoId: String,
+        permissions: Set<String> = emptySet()
     ): ExtractedBundle? = withContext(Dispatchers.IO) {
         if (!sourceEpub.isFile || !sourceEpub.canRead()) return@withContext null
         if (demoId.isBlank() || entryPath.isBlank() || entryPath.startsWith("/") ||
@@ -102,7 +103,10 @@ object InteractiveDemoPackage {
             currentCoroutineContext().ensureActive()
 
             val document = Jsoup.parse(entryFile, "UTF-8")
-            val csp = "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"
+            val networkAllowed = "network" in permissions
+            val remoteSources = if (networkAllowed) " https:" else ""
+            val remoteConnect = if (networkAllowed) "https:" else "'none'"
+            val csp = "default-src 'self'$remoteSources data: blob:; img-src 'self'$remoteSources data: blob:; style-src 'self' 'unsafe-inline'$remoteSources; script-src 'self' 'unsafe-inline'$remoteSources; connect-src $remoteConnect; frame-src $remoteConnect; worker-src 'none'; object-src 'none'; form-action 'self'$remoteSources; base-uri 'self'$remoteSources"
             document.head().prependElement("meta")
                 .attr("http-equiv", "Content-Security-Policy")
                 .attr("content", csp)
