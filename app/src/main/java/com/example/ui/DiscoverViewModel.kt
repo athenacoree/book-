@@ -214,7 +214,7 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
                     } catch (e: Exception) {
                         gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
                     } finally {
-                        if (currentCoroutineContext()[Job]?.parent == catalogRefreshJob) {
+                        if (currentCoroutineContext()[Job]?.isActive == true) {
                             gamesLoading.value = false
                         }
                     }
