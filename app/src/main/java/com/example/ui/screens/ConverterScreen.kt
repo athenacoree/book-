@@ -81,7 +81,7 @@ fun ConverterScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "Transforma cualquier formato al estándar de libro usado en iPhone y Apple Books.",
+                    text = "Busca varios archivos del dispositivo de una vez y prepara cada libro sin perder su contenido multimedia.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -178,7 +178,7 @@ fun ConverterScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Text(
-                        text = "Formatos de entrada compatibles",
+                        text = "Formatos y archivos compatibles",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -231,6 +231,12 @@ fun ConverterScreen(
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Puedes seleccionar varios archivos en una sola búsqueda. Android mostrará los documentos disponibles y tú eliges cuáles añadir.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Spacer(modifier = Modifier.height(18.dp))
                     Button(
                         onClick = onPickFileToConvert,
@@ -246,7 +252,7 @@ fun ConverterScreen(
                         Icon(Icons.Filled.FileOpen, contentDescription = null)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Seleccionar archivo para convertir a EPUB",
+                            text = "Buscar e importar varios archivos",
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
