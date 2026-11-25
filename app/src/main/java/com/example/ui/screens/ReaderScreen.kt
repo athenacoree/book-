@@ -1134,15 +1134,9 @@ private fun PaginatedEpubReaderView(
             pagerState.currentPage,
             chapter.index,
             pageTokens,
-            liveResetSignal,
-            showSettingsSheet,
-            showTocSheet,
-            showLongPressMenu,
-            showHtmlExitConfirm
+            liveResetSignal
         ) {
-            if (!preferences.liveEnabled || !livePlaying ||
-                showSettingsSheet || showTocSheet || showLongPressMenu || showHtmlExitConfirm
-            ) return@LaunchedEffect
+            if (!preferences.liveEnabled || !livePlaying) return@LaunchedEffect
 
             // Wait until page transition animation finishes completely before advancing highlights!
             snapshotFlow {
