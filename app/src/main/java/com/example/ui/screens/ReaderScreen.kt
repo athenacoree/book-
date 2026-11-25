@@ -159,6 +159,7 @@ import com.example.ui.components.ElasticBookmarkRibbon
 import com.example.ui.components.HtmlConsoleEntry
 import com.example.ui.components.HtmlGameReaderView
 import com.example.ui.components.InteractiveBookDemoView
+import com.example.ui.components.YouTubeBookVideoView
 import com.example.ui.components.LongPressQuickMenuOverlay
 import com.example.ui.components.ReaderColors
 import com.example.ui.components.TocAndBookmarksSheetContent
@@ -181,6 +182,7 @@ private sealed class PageElement {
     data class TextSlice(val text: AnnotatedString) : PageElement()
     data class InlineImage(val imagePath: String, val caption: String) : PageElement()
     data class InteractiveDemo(val demo: ReaderBlock.InteractiveDemo) : PageElement()
+    data class YouTubeVideo(val video: ReaderBlock.YouTubeVideo) : PageElement()
 }
 
 private data class ReaderPage(
@@ -361,6 +363,7 @@ fun ReaderScreen(
                                 is ReaderBlock.Quote -> it.text
                                 is ReaderBlock.ImageBlock -> it.caption.ifBlank { chapter.title }
                                 is ReaderBlock.InteractiveDemo -> it.title
+                                is ReaderBlock.YouTubeVideo -> it.title
                                 ReaderBlock.Divider -> chapter.title
                             }
                         } ?: chapter.title
@@ -410,7 +413,7 @@ fun ReaderScreen(
                 } else if (
                     preferences.liveEnabled &&
                     preferences.liveUnitMode == LiveUnitMode.PHRASE &&
-                    chapter.blocks.none { it is ReaderBlock.InteractiveDemo }
+                    chapter.blocks.none { it is ReaderBlock.InteractiveDemo || it is ReaderBlock.YouTubeVideo }
                 ) {
                     LiveLyricsStageView(
                         chapter = chapter,
@@ -1485,6 +1488,15 @@ private fun PaginatedEpubReaderView(
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
+                                    is PageElement.YouTubeVideo -> {
+                                        YouTubeBookVideoView(
+                                            video = element.video,
+                                            isVisible = isCurrentActivePage,
+                                            livePlaying = preferences.liveEnabled && livePlaying,
+                                            onPauseLive = { if (preferences.liveEnabled && livePlaying) onToggleLivePlay() },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1742,7 +1754,7 @@ private fun paginateChapterBlocks(
                         pop()
                         if (idx < textBatch.lastIndex) append("\n\n")
                     }
-                    is ReaderBlock.ImageBlock, is ReaderBlock.InteractiveDemo -> Unit
+                    is ReaderBlock.ImageBlock, is ReaderBlock.InteractiveDemo, is ReaderBlock.YouTubeVideo -> Unit
                 }
             }
         }
@@ -1755,6 +1767,11 @@ private fun paginateChapterBlocks(
             flushTextBatch()
             if (currentElements.isNotEmpty()) flushPage()
             currentElements.add(PageElement.InteractiveDemo(block))
+            flushPage()
+        } else if (block is ReaderBlock.YouTubeVideo) {
+            flushTextBatch()
+            if (currentElements.isNotEmpty()) flushPage()
+            currentElements.add(PageElement.YouTubeVideo(block))
             flushPage()
         } else if (block is ReaderBlock.ImageBlock) {
             flushTextBatch()
@@ -2609,6 +2626,15 @@ private fun ScrollEpubReaderView(
                     is ReaderBlock.InteractiveDemo -> {
                         InteractiveBookDemoView(
                             demo = block,
+                            isVisible = blockIdx in visibleBlockIndices,
+                            livePlaying = preferences.liveEnabled && livePlaying,
+                            onPauseLive = { if (preferences.liveEnabled && livePlaying) onToggleLivePlay() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    is ReaderBlock.YouTubeVideo -> {
+                        YouTubeBookVideoView(
+                            video = block,
                             isVisible = blockIdx in visibleBlockIndices,
                             livePlaying = preferences.liveEnabled && livePlaying,
                             onPauseLive = { if (preferences.liveEnabled && livePlaying) onToggleLivePlay() },
