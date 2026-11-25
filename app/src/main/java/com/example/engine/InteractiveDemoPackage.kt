@@ -95,7 +95,7 @@ object InteractiveDemoPackage {
             currentCoroutineContext().ensureActive()
 
             val document = Jsoup.parse(entryFile, "UTF-8")
-            val csp = "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"
+            val csp = "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"
             document.head().prependElement("meta")
                 .attr("http-equiv", "Content-Security-Policy")
                 .attr("content", csp)
