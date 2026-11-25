@@ -54,6 +54,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.text.style.TextAlign
@@ -160,6 +164,27 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
     }
 
     LuminaBookTheme(appThemeMode = libraryState.appThemeMode) {
+        val rootView = LocalView.current
+        val systemDark = isSystemInDarkTheme()
+        val darkBars = when (libraryState.appThemeMode) {
+            AppThemeMode.SYSTEM -> systemDark
+            AppThemeMode.LIGHT -> false
+            AppThemeMode.DARK -> true
+        }
+        SideEffect {
+            val window = (rootView.context as? ComponentActivity)?.window
+            if (window != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                WindowInsetsControllerCompat(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !darkBars
+                    isAppearanceLightNavigationBars = !darkBars
+                    hide(WindowInsetsCompat.Type.systemBars())
+                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            }
+        }
         val backStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = backStackEntry?.destination?.route
     val isReaderActive = currentRoute?.startsWith("reader/") == true
@@ -202,7 +227,7 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val useRail = maxWidth >= 700.dp && !isReaderActive
 
         Scaffold(
