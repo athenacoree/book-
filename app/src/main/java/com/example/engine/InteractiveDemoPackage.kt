@@ -50,44 +50,45 @@ object InteractiveDemoPackage {
                 var totalBytes = 0L
                 var copiedFiles = 0
 
-                zip.entries().asSequence()
+                val demoEntries = zip.entries().asSequence()
                     .filter { !it.isDirectory && it.name.startsWith(prefix) }
-                    .forEach { entry ->
-                        currentCoroutineContext().ensureActive()
-                        val relative = entry.name.removePrefix(prefix)
-                        if (relative.isBlank() || relative.startsWith("/") ||
-                            relative.split('/').any { it.isBlank() || it == ".." }
-                        ) return@forEach
+                    .toList()
+                for (entry in demoEntries) {
+                    currentCoroutineContext().ensureActive()
+                    val relative = entry.name.removePrefix(prefix)
+                    if (relative.isBlank() || relative.startsWith("/") ||
+                        relative.split('/').any { it.isBlank() || it == ".." }
+                    ) continue
 
-                        copiedFiles++
-                        require(copiedFiles <= MAX_FILES) { "La demostración contiene demasiados archivos" }
+                    copiedFiles++
+                    require(copiedFiles <= MAX_FILES) { "La demostración contiene demasiados archivos" }
 
-                        val outputFile = File(root, relative)
-                        val canonicalRoot = root.canonicalFile
-                        val canonicalOutput = outputFile.canonicalFile
-                        require(canonicalOutput.path.startsWith(canonicalRoot.path + File.separator)) {
-                            "La demostración contiene una ruta no permitida"
-                        }
-                        outputFile.parentFile?.mkdirs()
+                    val outputFile = File(root, relative)
+                    val canonicalRoot = root.canonicalFile
+                    val canonicalOutput = outputFile.canonicalFile
+                    require(canonicalOutput.path.startsWith(canonicalRoot.path + File.separator)) {
+                        "La demostración contiene una ruta no permitida"
+                    }
+                    outputFile.parentFile?.mkdirs()
 
-                        zip.getInputStream(entry).use { input ->
-                            outputFile.outputStream().buffered().use { output ->
-                                val buffer = ByteArray(16 * 1024)
-                                var entryBytes = 0L
-                                while (true) {
-                                    currentCoroutineContext().ensureActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    entryBytes += count
-                                    totalBytes += count
-                                    require(entryBytes <= MAX_ENTRY_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
-                                        "La demostración supera el tamaño permitido"
-                                    }
-                                    output.write(buffer, 0, count)
+                    zip.getInputStream(entry).use { input ->
+                        outputFile.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(16 * 1024)
+                            var entryBytes = 0L
+                            while (true) {
+                                currentCoroutineContext().ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                entryBytes += count
+                                totalBytes += count
+                                require(entryBytes <= MAX_ENTRY_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
+                                    "La demostración supera el tamaño permitido"
                                 }
+                                output.write(buffer, 0, count)
                             }
                         }
                     }
+                }
             }
 
             if (!entryFile.isFile) throw IllegalArgumentException("No se encontró el HTML principal")
