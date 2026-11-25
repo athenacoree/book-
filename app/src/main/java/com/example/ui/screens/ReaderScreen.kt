@@ -158,6 +158,7 @@ import com.example.ui.components.ChapterCompletionStampOverlay
 import com.example.ui.components.ElasticBookmarkRibbon
 import com.example.ui.components.HtmlConsoleEntry
 import com.example.ui.components.HtmlGameReaderView
+import com.example.ui.components.InteractiveBookDemoView
 import com.example.ui.components.LongPressQuickMenuOverlay
 import com.example.ui.components.ReaderColors
 import com.example.ui.components.TocAndBookmarksSheetContent
@@ -178,6 +179,7 @@ import kotlin.math.roundToInt
 private sealed class PageElement {
     data class TextSlice(val text: AnnotatedString) : PageElement()
     data class InlineImage(val imagePath: String, val caption: String) : PageElement()
+    data class InteractiveDemo(val demo: ReaderBlock.InteractiveDemo) : PageElement()
 }
 
 private data class ReaderPage(
@@ -357,6 +359,7 @@ fun ReaderScreen(
                                 is ReaderBlock.Paragraph -> it.text
                                 is ReaderBlock.Quote -> it.text
                                 is ReaderBlock.ImageBlock -> it.caption.ifBlank { chapter.title }
+                                is ReaderBlock.InteractiveDemo -> it.title
                                 ReaderBlock.Divider -> chapter.title
                             }
                         } ?: chapter.title
@@ -1474,6 +1477,13 @@ private fun PaginatedEpubReaderView(
                                             colors = colors
                                         )
                                     }
+                                    is PageElement.InteractiveDemo -> {
+                                        InteractiveBookDemoView(
+                                            demo = element.demo,
+                                            isVisible = isCurrentActivePage,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1731,7 +1741,7 @@ private fun paginateChapterBlocks(
                         pop()
                         if (idx < textBatch.lastIndex) append("\n\n")
                     }
-                    is ReaderBlock.ImageBlock -> Unit
+                    is ReaderBlock.ImageBlock, is ReaderBlock.InteractiveDemo -> Unit
                 }
             }
         }
@@ -1740,7 +1750,12 @@ private fun paginateChapterBlocks(
     }
 
     for (block in blocks) {
-        if (block is ReaderBlock.ImageBlock) {
+        if (block is ReaderBlock.InteractiveDemo) {
+            flushTextBatch()
+            if (currentElements.isNotEmpty()) flushPage()
+            currentElements.add(PageElement.InteractiveDemo(block))
+            flushPage()
+        } else if (block is ReaderBlock.ImageBlock) {
             flushTextBatch()
             val neededPx = imageReserveHeightPx.coerceAtMost(maxHeightPx)
             if (remainingHeightPx < neededPx && currentElements.isNotEmpty()) {
@@ -2384,6 +2399,12 @@ private fun ScrollEpubReaderView(
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialPageIndex.coerceIn(0, (chapter.blocks.size - 1).coerceAtLeast(0))
     )
+    var visibleBlockIndices by remember(chapter.index) { mutableStateOf<Set<Int>>(emptySet()) }
+
+    LaunchedEffect(listState, chapter.index) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.index }.toSet() }
+            .collect { visibleBlockIndices = it }
+    }
 
     LaunchedEffect(listState, chapter.index, chapter.blocks.size) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { visibleBlockIndex ->
@@ -2582,6 +2603,13 @@ private fun ScrollEpubReaderView(
                             imagePath = block.imagePath,
                             caption = block.caption,
                             colors = colors
+                        )
+                    }
+                    is ReaderBlock.InteractiveDemo -> {
+                        InteractiveBookDemoView(
+                            demo = block,
+                            isVisible = blockIdx in visibleBlockIndices,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                     ReaderBlock.Divider -> {
