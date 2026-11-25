@@ -6,6 +6,10 @@ import com.example.engine.ChapterInput
 import com.example.engine.EpubChapter
 import com.example.engine.EpubParser
 import com.example.engine.EpubWriter
+import com.example.engine.InteractiveDemoPackage
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import com.example.engine.ReaderBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -129,6 +133,91 @@ class EpubEngineTest {
         assertTrue(blocks[3] is ReaderBlock.Paragraph)
         assertEquals(1, parsed.totalImages)
         assertTrue(parsed.wordCount > 0)
+    }
+
+    @Test
+    fun epubParserRecognizesBundledInteractiveDemoWithoutExtractingIt() {
+        val epubFile = tempFolder.newFile("interactive.epub")
+        val imageCache = tempFolder.newFolder("interactive_cache")
+        createInteractiveDemoEpub(epubFile)
+
+        val parsed = EpubParser.parse(epubFile, imageCache)
+        val demo = parsed.chapters.first().blocks.filterIsInstance<ReaderBlock.InteractiveDemo>().single()
+
+        assertEquals("login", demo.id)
+        assertEquals("Prueba el formulario", demo.title)
+        assertEquals("OEBPS/interactive/login/index.html", demo.entryPath)
+        assertEquals(epubFile.absolutePath, demo.sourceEpubPath)
+        assertFalse(File(imageCache, "interactive_demos").exists())
+    }
+
+    @Test
+    fun interactiveDemoPackageExtractsOnlyTheVisibleDemosFolder() = runTest {
+        val epubFile = tempFolder.newFile("interactive_extract.epub")
+        val cacheDir = tempFolder.newFolder("demo_extract_cache")
+        createInteractiveDemoEpub(epubFile)
+
+        val extracted = InteractiveDemoPackage.extract(
+            sourceEpub = epubFile,
+            entryPath = "OEBPS/interactive/login/index.html",
+            cacheDir = cacheDir,
+            demoId = "login"
+        )
+
+        assertNotNull(extracted)
+        assertTrue(extracted!!.entryFile.isFile)
+        assertTrue(File(extracted.rootDir, "app.js").isFile)
+        assertTrue(File(extracted.rootDir, "styles.css").isFile)
+        assertFalse(File(extracted.rootDir, "not-this-demo.txt").exists())
+        assertTrue(extracted.entryFile.readText().contains("Content-Security-Policy"))
+    }
+
+    private fun createInteractiveDemoEpub(epubFile: File) {
+        ZipOutputStream(FileOutputStream(epubFile)).use { zos ->
+            fun add(path: String, content: String) {
+                zos.putNextEntry(ZipEntry(path))
+                zos.write(content.toByteArray())
+                zos.closeEntry()
+            }
+            add(
+                "META-INF/container.xml",
+                """<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                    <rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>
+                </container>"""
+            )
+            add(
+                "OEBPS/content.opf",
+                """<package xmlns="http://www.idpf.org/2007/opf" version="3.0"
+                    prefix="gitbook: https://gitbook.app/ns/epub#">
+                    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                        <dc:title>Manual interactivo</dc:title><dc:creator>GITBOOK</dc:creator>
+                    </metadata>
+                    <manifest>
+                        <item id="chapter1" href="text/ch1.xhtml" media-type="application/xhtml+xml"/>
+                        <item id="demo-login" href="interactive/login/index.html"
+                            media-type="text/html" properties="gitbook:interactive"/>
+                    </manifest>
+                    <spine><itemref idref="chapter1"/></spine>
+                </package>"""
+            )
+            add(
+                "OEBPS/text/ch1.xhtml",
+                """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+                    <h1>Formulario de prueba</h1>
+                    <p>Antes de probarlo.</p>
+                    <div data-gitbook-demo="login" data-gitbook-title="Prueba el formulario"></div>
+                    <p>Después de probarlo.</p>
+                </body></html>"""
+            )
+            add(
+                "OEBPS/interactive/login/index.html",
+                """<!doctype html><html><head><title>Demo</title><link rel="stylesheet" href="styles.css"></head>
+                    <body><button id="go">Probar</button><script src="app.js"></script></body></html>"""
+            )
+            add("OEBPS/interactive/login/styles.css", "body { padding: 12px; }")
+            add("OEBPS/interactive/login/app.js", "document.getElementById('go').textContent = 'Funciona';")
+            add("OEBPS/interactive/other/not-this-demo.txt", "No copiar este recurso")
+        }
     }
 
     @Test
