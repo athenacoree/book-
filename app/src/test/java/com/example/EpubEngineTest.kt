@@ -148,6 +148,8 @@ class EpubEngineTest {
         assertEquals("Prueba el formulario", demo.title)
         assertEquals("OEBPS/interactive/login/index.html", demo.entryPath)
         assertEquals(epubFile.absolutePath, demo.sourceEpubPath)
+        assertTrue("network" in demo.permissions)
+        assertTrue("microphone" in demo.permissions)
         assertFalse(File(imageCache, "interactive_demos").exists())
     }
 
@@ -191,6 +193,7 @@ class EpubEngineTest {
                     prefix="gitbook: https://gitbook.app/ns/epub#">
                     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
                         <dc:title>Manual interactivo</dc:title><dc:creator>GITBOOK</dc:creator>
+                        <meta property="gitbook:permissions">network microphone</meta>
                     </metadata>
                     <manifest>
                         <item id="chapter1" href="text/ch1.xhtml" media-type="application/xhtml+xml"/>
