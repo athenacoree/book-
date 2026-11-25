@@ -73,7 +73,8 @@ fun InteractiveBookDemoView(
                 sourceEpub = File(demo.sourceEpubPath),
                 entryPath = demo.entryPath,
                 cacheDir = File(demo.cacheDirPath),
-                demoId = demo.id
+                demoId = demo.id,
+                permissions = demo.permissions
             )
         }
     }
