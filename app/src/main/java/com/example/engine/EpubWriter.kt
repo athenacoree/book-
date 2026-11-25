@@ -20,7 +20,8 @@ object EpubWriter {
         author: String,
         language: String = "es",
         chapters: List<ChapterInput>,
-        coverJpegBytes: ByteArray? = null
+        coverJpegBytes: ByteArray? = null,
+        assets: List<EpubAsset> = emptyList()
     ) {
         outputFile.parentFile?.mkdirs()
         val bookUuid = "urn:uuid:${UUID.randomUUID()}"
@@ -94,13 +95,25 @@ blockquote {
                     zos.closeEntry()
                 }
 
+                // Imported media assets (images, audio and other EPUB resources).
+                val safeAssets = assets.filter { asset ->
+                    asset.path.startsWith("images/") && !asset.path.contains("..") &&
+                        asset.path.none { it == '\\' } && asset.bytes.isNotEmpty()
+                }.distinctBy { it.path }
+                safeAssets.forEach { asset ->
+                    zos.putNextEntry(ZipEntry("OEBPS/${asset.path}"))
+                    zos.write(asset.bytes)
+                    zos.closeEntry()
+                }
+
                 // 5. Chapter XHTML files
                 safeChapters.forEachIndexed { idx, ch ->
                     val fileName = "chapter_${String.format("%03d", idx + 1)}.xhtml"
                     val chTitle = escapeXml(ch.title.ifBlank { "Capítulo ${idx + 1}" })
                     val bodyBuilder = StringBuilder()
                     bodyBuilder.append("<h1>").append(chTitle).append("</h1>\n")
-                    ch.paragraphs.forEachIndexed { pIdx, p ->
+                    if (!ch.xhtmlBody.isNullOrBlank()) bodyBuilder.append(ch.xhtmlBody).append("\n")
+                    else ch.paragraphs.forEachIndexed { pIdx, p ->
                         val heading = ch.headings[pIdx]
                         if (!heading.isNullOrBlank()) {
                             bodyBuilder.append("<h2>").append(escapeXml(heading)).append("</h2>\n")
@@ -192,6 +205,9 @@ $ncxPoints
                 val spineItems = safeChapters.indices.joinToString("\n") { idx ->
                     """    <itemref idref="ch${idx + 1}"/>"""
                 }
+                val assetManifest = safeAssets.mapIndexed { idx, asset ->
+                    """    <item id="asset-${idx + 1}" href="${asset.path}" media-type="${escapeXml(asset.mediaType)}"/>"""
+                }.joinToString("\n")
                 val coverManifest = if (hasCover) {
                     """    <item id="cover-image" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>"""
                 } else ""
@@ -216,6 +232,7 @@ $coverMeta
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="css" href="style.css" media-type="text/css"/>
 $coverManifest
+$assetManifest
 $manifestChapters
   </manifest>
   <spine toc="ncx">

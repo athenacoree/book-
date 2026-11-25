@@ -163,7 +163,8 @@ class UniversalBookConverter(private val context: Context) {
                     outputFile = destEpub,
                     title = finalTitle,
                     author = finalAuthor,
-                    chapters = chapters
+                    chapters = chapters,
+                    assets = chapters.flatMap { it.assets }
                 )
             }
 
@@ -655,36 +656,68 @@ class UniversalBookConverter(private val context: Context) {
         }.getOrNull()
     }
 
-    private fun parseFb2(xml: String, fallbackTitle: String): Triple<String, String, List<ChapterInput>> {
+    private data class Fb2Import(
+        val title: String,
+        val author: String,
+        val chapters: List<ChapterInput>,
+        val assets: List<EpubAsset>
+    )
+
+    private fun parseFb2(xml: String, fallbackTitle: String): Fb2Import {
         val doc = Jsoup.parse(xml, "", Parser.xmlParser())
         val title = doc.selectFirst("book-title")?.text()?.trim().takeIf { !it.isNullOrBlank() } ?: fallbackTitle
         val firstName = doc.selectFirst("author > first-name")?.text()?.trim().orEmpty()
         val lastName = doc.selectFirst("author > last-name")?.text()?.trim().orEmpty()
         val author = "$firstName $lastName".trim().ifBlank { "Autor desconocido" }
-
-        val chapters = mutableListOf<ChapterInput>()
-        val sections = doc.select("body > section")
-        if (sections.isNotEmpty()) {
-            sections.forEachIndexed { idx, sec ->
-                val secTitle = sec.selectFirst("> title")?.text()?.trim().takeIf { !it.isNullOrBlank() }
-                    ?: "Capítulo ${idx + 1}"
-                val paras = sec.select("p, cite, subtitle").map { it.text().trim() }.filter { it.isNotEmpty() }
-                if (paras.isNotEmpty()) {
-                    chapters.add(ChapterInput(secTitle, paras))
-                }
+        val assetsById = linkedMapOf<String, EpubAsset>()
+        doc.select("binary[id]").forEach { binary ->
+            val id = binary.attr("id").replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val mime = binary.attr("content-type").ifBlank { "image/jpeg" }.lowercase()
+            val extension = when (mime) {
+                "image/png" -> "png"
+                "image/gif" -> "gif"
+                "image/webp" -> "webp"
+                "image/svg+xml" -> "svg"
+                else -> "jpg"
             }
-        } else {
-            val paras = doc.select("body p").map { it.text().trim() }.filter { it.isNotEmpty() }
-            if (paras.isNotEmpty()) {
-                chapters.addAll(paras.chunked(45).mapIndexed { idx, chunk ->
-                    ChapterInput(if (idx == 0) title else "Parte ${idx + 1}", chunk)
-                })
+            val encoded = binary.data().ifBlank { binary.text() }.replace(Regex("\\s+"), "")
+            val bytes = runCatching { android.util.Base64.decode(encoded, android.util.Base64.DEFAULT) }.getOrNull()
+            if (bytes != null && bytes.isNotEmpty() && bytes.size <= 24 * 1024 * 1024) {
+                assetsById[id] = EpubAsset("images/fb2_$id.$extension", bytes, mime)
             }
         }
-
-        return Triple(title, author, chapters.ifEmpty {
+        val chapters = mutableListOf<ChapterInput>()
+        val sections = doc.select("body > section")
+        val sectionList = sections.ifEmpty { listOf(doc.selectFirst("body") ?: doc) }
+        sectionList.forEachIndexed { idx, section ->
+            val titleText = section.selectFirst(":scope > title")?.text()?.trim()
+                .takeIf { !it.isNullOrBlank() } ?: if (idx == 0) title else "Capítulo ${idx + 1}"
+            val body = StringBuilder()
+            section.select("p, cite, subtitle, image").forEach { node ->
+                when (node.tagName().lowercase()) {
+                    "image" -> {
+                        val ref = node.attr("xlink:href").ifBlank { node.attr("href") }.removePrefix("#")
+                        val asset = assetsById[ref]
+                        if (asset != null) body.append("<figure><img src=\\"").append(asset.path)
+                            .append("\\" alt=\\"").append(ref).append("\\"/></figure>\\n")
+                    }
+                    else -> node.text().trim().takeIf { it.isNotEmpty() }?.let {
+                        body.append("<p>").append(org.jsoup.parser.Parser.unescapeEntities(it, false)
+                            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+                            .append("</p>\\n")
+                    }
+                }
+            }
+            val html = body.toString()
+            val plain = section.select("p, cite, subtitle").map { it.text().trim() }.filter { it.isNotEmpty() }
+            if (html.isNotBlank() || plain.isNotEmpty()) {
+                chapters.add(ChapterInput(titleText, plain, xhtmlBody = html))
+            }
+        }
+        val safeChapters = chapters.ifEmpty {
             listOf(ChapterInput(title, listOf("No se encontró texto legible en el archivo FB2.")))
-        })
+        }
+        return Fb2Import(title, author, safeChapters, assetsById.values.toList())
     }
 
     private fun extractHtmlChapters(html: String, fallbackTitle: String): List<ChapterInput> {

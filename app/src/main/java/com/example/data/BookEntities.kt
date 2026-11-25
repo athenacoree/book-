@@ -36,6 +36,7 @@ data class BookEntity(
     @ColumnInfo(defaultValue = "''") val gameVersion: String = "",
     val catalogGameId: Long? = null,
     @ColumnInfo(defaultValue = "'index.html'") val gamePackageEntry: String = "index.html",
+    @androidx.room.ColumnInfo(defaultValue = "''")
     val readerSettingsJson: String = ""
 )
 

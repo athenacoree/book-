@@ -99,8 +99,11 @@ sealed class ReaderBlock {
 data class ChapterInput(
     val title: String,
     val paragraphs: List<String>,
-    val headings: Map<Int, String> = emptyMap()
+    val headings: Map<Int, String> = emptyMap(),
+    val xhtmlBody: String? = null
 )
+
+data class EpubAsset(val path: String, val bytes: ByteArray, val mediaType: String)
 
 data class EpubChapter(
     val index: Int,
