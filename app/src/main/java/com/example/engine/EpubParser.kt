@@ -382,15 +382,18 @@ object EpubParser {
                     }
                 }
                 "p" -> {
-                    // Preserve inline images inside paragraphs in reading order
                     val imgs = el.select("img")
                     val txt = el.text().trim()
-                    if (txt.isNotEmpty()) {
+                    val videoId = extractYouTubeId(txt)
+                        ?: el.selectFirst("a[href]")?.attr("href")?.let(::extractYouTubeId)
+                    if (videoId != null) {
+                        val remainingText = txt.replace(Regex("https?://\\S+"), "").trim()
+                        if (remainingText.isNotBlank()) blocks.add(ReaderBlock.Paragraph(remainingText))
+                        blocks.add(ReaderBlock.YouTubeVideo(videoId))
+                    } else if (txt.isNotEmpty()) {
                         blocks.add(ReaderBlock.Paragraph(txt))
                     }
-                    imgs.forEach { img ->
-                        extractImageBlock(img.attr("src"), img.attr("alt"))
-                    }
+                    imgs.forEach { img -> extractImageBlock(img.attr("src"), img.attr("alt")) }
                 }
                 "blockquote" -> {
                     val txt = el.text().trim()
@@ -440,6 +443,15 @@ object EpubParser {
         }
 
         return (firstHeading ?: headTitle) to blocks
+    }
+
+    private fun extractYouTubeId(raw: String): String? {
+        val value = raw.trim().trimEnd('.', ',', ')', ']', '}', '"', '\'')
+        val match = Regex(
+            """(?:youtube\.com/(?:watch\?(?:[^#]*?&)?v=|embed/|shorts/|live/)|youtu\.be/)([A-Za-z0-9_-]{11})""",
+            RegexOption.IGNORE_CASE
+        ).find(value) ?: return null
+        return match.groupValues[1]
     }
 
     private fun buildInteractiveDemoBlock(
