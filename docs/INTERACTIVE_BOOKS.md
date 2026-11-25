@@ -54,7 +54,9 @@ Place a marker exactly where the example belongs in the chapter XHTML. The marke
 - The book download already contains the HTML and its local resources; no separate download is needed.
 - GITBOOK extracts only that demo's folder into the app's private cache when the reader reaches that visible block.
 - The WebView is created only while the demo block is visible (or its page is the active page). Off-screen demos do not run.
-- The demo's WebView has JavaScript enabled for its local interactions, but network requests, external navigation, file/content-provider access, pop-up windows, and native JavaScript bridges are blocked.
+- The demo's WebView has JavaScript enabled for its local interactions. Network access is disabled by default and enabled only when the EPUB declares the `network` capability. With that capability, HTTPS resources and pages from any host can load inside the demo.
+- File/content-provider access, pop-up windows, mixed HTTP content, and native JavaScript bridges remain blocked. HTTPS is required for remote content.
+- Declare capabilities in package metadata: `<meta property="gitbook:permissions">network microphone camera</meta>`. Supported capabilities are `network`, `microphone`, and `camera`. Android must separately authorize microphone/camera use at runtime.
 - Each demo is size- and file-count-limited during extraction. Keep each demo folder under 48 MiB and below 180 files.
 - Use relative paths for local resources. Do not depend on CDNs, remote fonts, APIs, embedded external frames, or remote scripts; those are intentionally unavailable offline.
 
