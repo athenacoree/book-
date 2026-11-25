@@ -84,6 +84,7 @@ sealed class ReaderBlock {
     data class Paragraph(val text: String) : ReaderBlock()
     data class Quote(val text: String) : ReaderBlock()
     data class ImageBlock(val imagePath: String, val caption: String = "") : ReaderBlock()
+    data class YouTubeVideo(val videoId: String, val title: String = "Vídeo de YouTube") : ReaderBlock()
     data class InteractiveDemo(
         val id: String,
         val title: String,
