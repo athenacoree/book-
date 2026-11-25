@@ -87,8 +87,9 @@ sealed class ReaderBlock {
     data class InteractiveDemo(
         val id: String,
         val title: String,
-        val htmlFilePath: String,
-        val bundleRootPath: String
+        val sourceEpubPath: String,
+        val entryPath: String,
+        val cacheDirPath: String
     ) : ReaderBlock()
     data object Divider : ReaderBlock()
 }
