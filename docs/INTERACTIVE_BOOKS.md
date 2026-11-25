@@ -48,7 +48,7 @@ Place a marker exactly where the example belongs in the chapter XHTML. The marke
 
 - The marker is parsed as a dedicated reader block and stays in the correct reading order.
 - The book download already contains the HTML and its local resources; no separate download is needed.
-- GITBOOK extracts only that demo's folder into the app's private cache when parsing the downloaded EPUB.
+- GITBOOK extracts only that demo's folder into the app's private cache when the reader reaches that visible block.
 - The WebView is created only while the demo block is visible (or its page is the active page). Off-screen demos do not run.
 - The demo's WebView has JavaScript enabled for its local interactions, but network requests, external navigation, file/content-provider access, pop-up windows, and native JavaScript bridges are blocked.
 - Each demo is size- and file-count-limited during extraction. Keep each demo folder under 48 MiB and below 180 files.
