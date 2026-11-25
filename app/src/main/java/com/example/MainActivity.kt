@@ -85,7 +85,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.engine.AppThemeMode
 import com.example.ui.DiscoverViewModel
 import com.example.ui.LibraryViewModel
 import com.example.ui.ReaderViewModel
@@ -170,9 +169,9 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
         val rootView = LocalView.current
         val systemDark = isSystemInDarkTheme()
         val darkBars = when (libraryState.appThemeMode) {
-            AppThemeMode.SYSTEM -> systemDark
-            AppThemeMode.LIGHT -> false
-            AppThemeMode.DARK -> true
+            com.example.engine.AppThemeMode.SYSTEM -> systemDark
+            com.example.engine.AppThemeMode.LIGHT -> false
+            com.example.engine.AppThemeMode.DARK -> true
         }
         SideEffect {
             val window = (rootView.context as? ComponentActivity)?.window
