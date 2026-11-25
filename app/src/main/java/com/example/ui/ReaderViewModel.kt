@@ -21,7 +21,10 @@ import com.example.engine.ReaderTheme
 import com.example.engine.ReadingMode
 import com.example.engine.TapNavigationMode
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -66,6 +69,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private var loadJob: Job? = null
     private var bookmarksJob: Job? = null
     private var progressJob: Job? = null
+    private data class PendingProgress(val bookId: String, val chapterIndex: Int, val pageIndex: Int, val progressPercent: Int)
+    @Volatile private var pendingProgress: PendingProgress? = null
 
     fun loadBook(bookId: String) {
         if (loadedBookId == bookId && _loadState.value is ReaderLoadState.Ready) return
@@ -146,17 +151,27 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         val overallPercent = (((safeChapter + chapterFraction) / totalChapters.toFloat()) * 100f)
             .toInt()
             .coerceIn(1, 100)
+        val snapshot = PendingProgress(ready.book.id, safeChapter, safePage, overallPercent)
+        pendingProgress = snapshot
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
-            delay(350)
-            if (loadedBookId != ready.book.id) return@launch
-            repository.updateReadingProgress(
-                bookId = ready.book.id,
-                chapterIndex = safeChapter,
-                pageIndex = safePage,
-                progressPercent = overallPercent
-            )
+            delay(140)
+            if (loadedBookId != snapshot.bookId || pendingProgress != snapshot) return@launch
+            repository.updateReadingProgress(snapshot.bookId, snapshot.chapterIndex, snapshot.pageIndex, snapshot.progressPercent)
+            if (pendingProgress == snapshot) pendingProgress = null
         }
+    }
+
+    override fun onCleared() {
+        val snapshot = pendingProgress
+        if (snapshot != null) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching {
+                    repository.updateReadingProgress(snapshot.bookId, snapshot.chapterIndex, snapshot.pageIndex, snapshot.progressPercent)
+                }
+            }
+        }
+        super.onCleared()
     }
 
     fun addBookmark(excerpt: String) {
