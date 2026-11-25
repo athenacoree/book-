@@ -1485,6 +1485,8 @@ private fun PaginatedEpubReaderView(
                                         InteractiveBookDemoView(
                                             demo = element.demo,
                                             isVisible = isCurrentActivePage,
+                                            livePlaying = livePlaying,
+                                            onPauseLive = { if (livePlaying) onToggleLivePlay() },
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -2613,6 +2615,8 @@ private fun ScrollEpubReaderView(
                         InteractiveBookDemoView(
                             demo = block,
                             isVisible = blockIdx in visibleBlockIndices,
+                            livePlaying = livePlaying,
+                            onPauseLive = { if (livePlaying) onToggleLivePlay() },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
