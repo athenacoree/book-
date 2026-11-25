@@ -57,7 +57,8 @@ object EpubParser {
                     chapterBaseDir = chapterBaseDir,
                     imageCacheDir = resolvedImageDir,
                     interactiveDemoHrefs = interactiveDemoHrefs,
-                    interactiveCacheDir = interactiveCacheDir
+                    interactiveCacheDir = interactiveCacheDir,
+                    sourceEpubPath = epubFile.absolutePath
                 )
                 if (blocks.isNotEmpty()) {
                     val tocTitle = tocLabels[href.substringBefore('#')]
@@ -90,7 +91,8 @@ object EpubParser {
                         chapterBaseDir = chapterBaseDir,
                         imageCacheDir = resolvedImageDir,
                         interactiveDemoHrefs = interactiveDemoHrefs,
-                        interactiveCacheDir = interactiveCacheDir
+                        interactiveCacheDir = interactiveCacheDir,
+                        sourceEpubPath = epubFile.absolutePath
                     )
                     if (blocks.isNotEmpty()) {
                         chapters.add(
@@ -302,7 +304,8 @@ object EpubParser {
         chapterBaseDir: String,
         imageCacheDir: File?,
         interactiveDemoHrefs: Map<String, String>,
-        interactiveCacheDir: File?
+        interactiveCacheDir: File?,
+        sourceEpubPath: String
     ): Pair<String?, List<ReaderBlock>> {
         val doc = Jsoup.parse(html)
         val headTitle = doc.title().trim().takeIf { it.isNotBlank() && !it.equals("Unknown", true) }
@@ -337,7 +340,9 @@ object EpubParser {
                 val demoTitle = el.attr("data-gitbook-title").trim()
                     .ifBlank { el.attr("aria-label").trim() }
                     .ifBlank { "Demostración interactiva" }
-                val demo = extractInteractiveDemo(demoId, demoTitle, zip, interactiveDemoHrefs, interactiveCacheDir)
+                val demo = buildInteractiveDemoBlock(
+                    demoId, demoTitle, sourceEpubPath, interactiveDemoHrefs, interactiveCacheDir
+                )
                 if (demo != null) blocks.add(demo)
                 else blocks.add(ReaderBlock.Paragraph("La demostración «$demoTitle» no está disponible en este paquete."))
                 return
@@ -436,10 +441,10 @@ object EpubParser {
         return (firstHeading ?: headTitle) to blocks
     }
 
-    private fun extractInteractiveDemo(
+    private fun buildInteractiveDemoBlock(
         demoId: String,
         title: String,
-        zip: ZipFile,
+        sourceEpubPath: String,
         manifest: Map<String, String>,
         cacheDir: File?
     ): ReaderBlock.InteractiveDemo? {
@@ -447,49 +452,15 @@ object EpubParser {
         val safeId = demoId.replace(Regex("[^A-Za-z0-9._-]"), "_")
         val cleanEntry = manifest[demoId] ?: manifest["demo-$demoId"] ?: return null
         if (cleanEntry.isBlank() || cleanEntry.startsWith("/")) return null
-        if (cacheDir == null) {
-            return ReaderBlock.InteractiveDemo(safeId, title.take(100), "", "")
-        }
-        val relativeRoot = cleanEntry.substringBeforeLast('/', "")
-        // Keep each demo's files in its own folder; never unpack an entire EPUB for one widget.
-        if (relativeRoot.isBlank()) return null
-        val root = File(cacheDir, safeId)
-        val entryName = cleanEntry.substringAfterLast('/')
-        val indexFile = File(root, entryName)
-        if (!indexFile.isFile) {
-            runCatching {
-                root.deleteRecursively()
-                root.mkdirs()
-                val prefix = "$relativeRoot/"
-                var totalBytes = 0L
-                var copiedEntries = 0
-                zip.entries().asSequence().filter { !it.isDirectory && it.name.startsWith(prefix) }.forEach { entry ->
-                    val relative = entry.name.removePrefix(prefix)
-                    if (relative.isBlank() || relative.startsWith("/") || relative.split('/').any { it == ".." }) return@forEach
-                    if (++copiedEntries > 180) throw IllegalArgumentException("Demostración con demasiados recursos")
-                    val bytes = readEntryBytes(zip, entry.name) ?: return@forEach
-                    totalBytes += bytes.size
-                    if (totalBytes > 48L * 1024L * 1024L) throw IllegalArgumentException("Demostración demasiado grande")
-                    val out = File(root, relative)
-                    val canonicalRoot = root.canonicalFile
-                    val canonicalOut = out.canonicalFile
-                    if (!canonicalOut.path.startsWith(canonicalRoot.path + File.separator)) {
-                        throw SecurityException("Ruta de recurso no válida")
-                    }
-                    out.parentFile?.mkdirs()
-                    out.writeBytes(bytes)
-                }
-                if (!indexFile.isFile) throw IllegalArgumentException("No se encontró el HTML principal")
-                val document = Jsoup.parse(indexFile, "UTF-8")
-                val csp = "default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'self'"
-                document.head().prependElement("meta")
-                    .attr("http-equiv", "Content-Security-Policy")
-                    .attr("content", csp)
-                indexFile.writeText(document.outerHtml(), Charsets.UTF_8)
-            }.onFailure { root.deleteRecursively() }.getOrNull() ?: return null
-        }
-        if (!indexFile.isFile) return null
-        return ReaderBlock.InteractiveDemo(safeId, title.take(100), indexFile.absolutePath, root.absolutePath)
+        val folder = cleanEntry.substringBeforeLast('/', "")
+        if (folder.isBlank() || cleanEntry.split('/').any { it == ".." || it.isBlank() }) return null
+        return ReaderBlock.InteractiveDemo(
+            id = safeId,
+            title = title.take(100),
+            sourceEpubPath = sourceEpubPath,
+            entryPath = cleanEntry,
+            cacheDirPath = cacheDir?.absolutePath.orEmpty()
+        )
     }
 
     private fun resolvePath(baseDir: String, relative: String): String {
