@@ -36,7 +36,7 @@ object EpubParser {
             val tocLabels = parseTocLabels(zip, opfBaseDir, opfData)
             val interactiveDemoHrefs = opfData.interactiveDemoHrefs.mapValues { (_, href) ->
                 normalizeZipPath(opfBaseDir, href)
-            }
+            } + ("__gitbook_permissions__" to opfData.interactivePermissions.joinToString(","))
             val interactiveCacheDir = imageCacheDir?.let { File(it, "interactive_demos") }
 
             val coverBytes = resolveCoverBytes(zip, opfBaseDir, opfData)
@@ -151,7 +151,8 @@ object EpubParser {
         val coverId: String?,
         val ncxId: String?,
         val navHref: String?,
-        val interactiveDemoHrefs: Map<String, String>
+        val interactiveDemoHrefs: Map<String, String>,
+        val interactivePermissions: Set<String>
     )
 
     private fun parseContainerOpfPath(stream: InputStream): String? {
@@ -204,6 +205,11 @@ object EpubParser {
         var ncxId: String? = null
         var navHref: String? = null
         val interactiveDemoHrefs = mutableMapOf<String, String>()
+        val interactivePermissions = doc.select("meta[property=gitbook:permissions]")
+            .flatMap { it.attr("content").ifBlank { it.text() }.split(Regex("[,\\s]+")) }
+            .map { it.trim().lowercase() }
+            .filter { it in setOf("network", "microphone", "camera") }
+            .toSet()
 
         doc.select("manifest > item, item").forEach { item ->
             val id = item.attr("id")
@@ -249,7 +255,8 @@ object EpubParser {
             coverId = coverId,
             ncxId = ncxId,
             navHref = navHref,
-            interactiveDemoHrefs = interactiveDemoHrefs
+            interactiveDemoHrefs = interactiveDemoHrefs,
+            interactivePermissions = interactivePermissions
         )
     }
 
@@ -342,7 +349,9 @@ object EpubParser {
                     .ifBlank { el.attr("aria-label").trim() }
                     .ifBlank { "Demostración interactiva" }
                 val demo = buildInteractiveDemoBlock(
-                    demoId, demoTitle, sourceEpubPath, interactiveDemoHrefs, interactiveCacheDir
+                    demoId, demoTitle, sourceEpubPath, interactiveDemoHrefs, interactiveCacheDir,
+                    opfPermissions = interactiveDemoHrefs["__gitbook_permissions__"].orEmpty()
+                        .split(",").filter { it.isNotBlank() }.toSet()
                 )
                 if (demo != null) blocks.add(demo)
                 else blocks.add(ReaderBlock.Paragraph("La demostración «$demoTitle» no está disponible en este paquete."))
@@ -459,7 +468,8 @@ object EpubParser {
         title: String,
         sourceEpubPath: String,
         manifest: Map<String, String>,
-        cacheDir: File?
+        cacheDir: File?,
+        opfPermissions: Set<String>
     ): ReaderBlock.InteractiveDemo? {
         if (demoId.isBlank() || demoId.length > 80) return null
         val safeId = demoId.replace(Regex("[^A-Za-z0-9._-]"), "_")
@@ -472,7 +482,8 @@ object EpubParser {
             title = title.take(100),
             sourceEpubPath = sourceEpubPath,
             entryPath = cleanEntry,
-            cacheDirPath = cacheDir?.absolutePath.orEmpty()
+            cacheDirPath = cacheDir?.absolutePath.orEmpty(),
+            permissions = opfPermissions
         )
     }
 
