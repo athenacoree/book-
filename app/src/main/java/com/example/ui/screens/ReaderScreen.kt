@@ -406,7 +406,11 @@ fun ReaderScreen(
                             showLongPressMenu = true
                         }
                     )
-                } else if (preferences.liveEnabled && preferences.liveUnitMode == LiveUnitMode.PHRASE) {
+                } else if (
+                    preferences.liveEnabled &&
+                    preferences.liveUnitMode == LiveUnitMode.PHRASE &&
+                    chapter.blocks.none { it is ReaderBlock.InteractiveDemo }
+                ) {
                     LiveLyricsStageView(
                         chapter = chapter,
                         totalChapters = epub.chapters.size,
