@@ -70,6 +70,9 @@ fun InteractiveBookDemoView(
         }
     }
     val extractedBundle = extractionState.second
+    val virtualHost = remember(demo.sourceEpubPath, demo.id) {
+        "demo-${(demo.sourceEpubPath + "|" + demo.id).hashCode().toUInt()}.gitbook.local"
+    }
     var activeWebView by remember(demo.id, demo.entryPath) { mutableStateOf<WebView?>(null) }
 
     Column(
@@ -164,7 +167,7 @@ fun InteractiveBookDemoView(
                                     request: WebResourceRequest
                                 ): Boolean {
                                     val uri = request.url
-                                    return !(uri.scheme == "https" && uri.host == "gitbook.local" &&
+                                    return !(uri.scheme == "https" && uri.host == virtualHost &&
                                         uri.path.orEmpty().startsWith(virtualPrefix))
                                 }
 
@@ -173,7 +176,7 @@ fun InteractiveBookDemoView(
                                     request: WebResourceRequest
                                 ): WebResourceResponse? {
                                     val uri = request.url
-                                    if (uri.scheme == "https" && uri.host == "gitbook.local") {
+                                    if (uri.scheme == "https" && uri.host == virtualHost) {
                                         val asset = resolveLocalAsset(uri.path)
                                             ?: return blockedResponse(404)
                                         return runCatching {
@@ -191,13 +194,13 @@ fun InteractiveBookDemoView(
                             }
                             activeWebView = this
                             tag = bundle.entryFile.absolutePath
-                            loadUrl("https://gitbook.local/${demo.id}/${bundle.entryFile.name}")
+                            loadUrl("https://$virtualHost/${demo.id}/${bundle.entryFile.name}")
                         }
                     },
                     update = { view ->
                         if (view.tag != bundle.entryFile.absolutePath) {
                             view.tag = bundle.entryFile.absolutePath
-                            view.loadUrl("https://gitbook.local/${demo.id}/${bundle.entryFile.name}")
+                            view.loadUrl("https://$virtualHost/${demo.id}/${bundle.entryFile.name}")
                         }
                     }
                 )
