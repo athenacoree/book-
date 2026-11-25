@@ -34,11 +34,18 @@ object InteractiveDemoPackage {
         if (safeId.isBlank()) return@withContext null
         val folder = entryPath.substringBeforeLast('/', "")
         if (folder.isBlank()) return@withContext null
-        val cacheKey = "${safeId}_${sourceEpub.lastModified()}_${sourceEpub.length()}"
-        val root = File(cacheDir, cacheKey)
+        val canonicalCacheDir = cacheDir.canonicalFile
+        canonicalCacheDir.mkdirs()
+        val sourceIdentity = sourceEpub.canonicalPath.hashCode().toUInt()
+        val cacheKey = "${safeId}_${sourceIdentity}_${sourceEpub.lastModified()}_${sourceEpub.length()}"
+        val root = File(canonicalCacheDir, cacheKey)
+        require(root.canonicalPath.startsWith(canonicalCacheDir.path + File.separator)) {
+            "Ruta de caché no válida"
+        }
         val entryFile = File(root, entryPath.substringAfterLast('/'))
+        val completionMarker = File(root, ".gitbook-demo-complete")
 
-        if (entryFile.isFile) {
+        if (entryFile.isFile && completionMarker.isFile) {
             return@withContext ExtractedBundle(entryFile, root)
         }
 
@@ -100,6 +107,7 @@ object InteractiveDemoPackage {
                 .attr("http-equiv", "Content-Security-Policy")
                 .attr("content", csp)
             entryFile.writeText(document.outerHtml(), Charsets.UTF_8)
+            completionMarker.writeText("ok", Charsets.UTF_8)
 
             ExtractedBundle(entryFile, root)
         } catch (cancelled: CancellationException) {
