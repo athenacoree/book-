@@ -23,14 +23,18 @@ book.epub
                 └── illustration.png
 ```
 
-Add an OPF manifest item for each example. The ID must start with `demo-`; the `properties` token tells GITBOOK that this resource is an interactive entry point.
+Declare the custom property prefix on the OPF `package` element (EPUB 3), then add a manifest item for each example. The ID must start with `demo-`; the custom `properties` token tells GITBOOK that this resource is an interactive entry point.
 
 ```xml
-<item
+<package version="3.0" prefix="gitbook: https://gitbook.app/ns/epub#">
+  <manifest>
+    <item
     id="demo-login-form"
     href="interactive/login-form/index.html"
     media-type="text/html"
-    properties="gitbook-interactive" />
+    properties="gitbook:interactive" />
+  </manifest>
+</package>
 ```
 
 Place a marker exactly where the example belongs in the chapter XHTML. The marker ID is the part after `demo-`.
