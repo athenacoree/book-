@@ -268,6 +268,20 @@ fun ReaderScreen(
         it.book.isHtmlGame && !it.book.originalPath.isNullOrBlank()
     } == true
 
+    fun openSettings(tab: Int) {
+        livePlaying = false
+        showControls = false
+        showLongPressMenu = false
+        openSettings(tab)
+    }
+
+    fun openTableOfContents() {
+        livePlaying = false
+        showControls = false
+        showLongPressMenu = false
+        showTocSheet = true
+    }
+
     BackHandler {
         when {
             showSettingsSheet -> showSettingsSheet = false
@@ -281,10 +295,6 @@ fun ReaderScreen(
     }
 
     val colors = resolveReaderColors(preferences.readerTheme)
-
-    LaunchedEffect(preferences.liveEnabled) {
-        if (preferences.liveEnabled) livePlaying = true
-    }
 
     LaunchedEffect(bookmarkSavedToast) {
         if (bookmarkSavedToast) {
@@ -309,17 +319,7 @@ fun ReaderScreen(
 
         when (loadState) {
             ReaderLoadState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = colors.accent)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Abriendo libro EPUB…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.mutedText
-                        )
-                    }
-                }
+                ReaderLoadingSkeleton(colors = colors)
             }
 
             is ReaderLoadState.Error -> {
@@ -378,8 +378,7 @@ fun ReaderScreen(
                         isExternalOverlayOpen = showSettingsSheet || showTocSheet || showHtmlExitConfirm,
                         onToggleControls = { showControls = !showControls },
                         onOpenSettings = { tab ->
-                            initialSettingsTab = tab
-                            showSettingsSheet = true
+                            openSettings(tab)
                         },
                         onToggleMute = onSetHtmlGameMuted,
                         onEnableSafeSoftwareMode = { onSetHtmlGameSafeSoftwareMode(true) },
@@ -415,8 +414,7 @@ fun ReaderScreen(
                         onToggleLivePlay = { livePlaying = !livePlaying },
                         onRestartLive = { liveResetSignal++ },
                         onOpenLiveSettings = {
-                            initialSettingsTab = 2
-                            showSettingsSheet = true
+                            openSettings(2)
                         },
                         onToggleControls = { showControls = !showControls },
                         onLongPress = {
@@ -466,8 +464,7 @@ fun ReaderScreen(
                         },
                         onToggleLivePlay = { livePlaying = !livePlaying },
                         onOpenLiveSettings = {
-                            initialSettingsTab = 2
-                            showSettingsSheet = true
+                            openSettings(2)
                         },
                         onUpdateExcerpt = { currentPageExcerpt = it }
                     )
@@ -510,8 +507,7 @@ fun ReaderScreen(
                         onToggleLivePlay = { livePlaying = !livePlaying },
                         onRestartLivePage = { liveResetSignal++ },
                         onOpenLiveSettings = {
-                            initialSettingsTab = 2
-                            showSettingsSheet = true
+                            openSettings(2)
                         }
                     )
                 }
@@ -622,7 +618,7 @@ fun ReaderScreen(
                                 }
 
                                 IconButton(
-                                    onClick = { showTocSheet = true },
+                                    onClick = { openTableOfContents() },
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
                                         .testTag("reader_toc_button")
@@ -636,8 +632,7 @@ fun ReaderScreen(
 
                                 IconButton(
                                     onClick = {
-                                        initialSettingsTab = 0
-                                        showSettingsSheet = true
+                                        openSettings(0)
                                     },
                                     modifier = Modifier
                                         .minimumInteractiveComponentSize()
@@ -725,8 +720,7 @@ fun ReaderScreen(
                                     }
                                     TextButton(
                                         onClick = {
-                                            initialSettingsTab = 4
-                                            showSettingsSheet = true
+                                            openSettings(4)
                                         }
                                     ) {
                                         Icon(
@@ -804,8 +798,7 @@ fun ReaderScreen(
                                 ) {
                                     TextButton(
                                         onClick = {
-                                            initialSettingsTab = 2
-                                            showSettingsSheet = true
+                                            openSettings(2)
                                         }
                                     ) {
                                         Icon(
@@ -854,10 +847,9 @@ fun ReaderScreen(
                     onSetTheme = onSetTheme,
                     onSetPageTransitionStyle = onSetPageTransitionStyle,
                     onAddBookmark = { triggerAddBookmark() },
-                    onOpenToc = { showTocSheet = true },
+                    onOpenToc = { openTableOfContents() },
                     onOpenFullSettings = { tab ->
-                        initialSettingsTab = tab
-                        showSettingsSheet = true
+                        openSettings(tab)
                     }
                 )
 
@@ -880,7 +872,9 @@ fun ReaderScreen(
 
                 // Unified Reading Center Sheet (Apariencia • Páginas 3D • Modo Live • Efectos)
                 if (showSettingsSheet) {
-                    ModalBottomSheet(onDismissRequest = { showSettingsSheet = false }) {
+                    ModalBottomSheet(onDismissRequest = {
+                            showSettingsSheet = false
+                        }) {
                         UnifiedReaderSettingsSheet(
                             initialTab = initialSettingsTab,
                             preferences = preferences,
@@ -934,7 +928,9 @@ fun ReaderScreen(
 
                 // TOC & Bookmarks Sheet
                 if (showTocSheet) {
-                    ModalBottomSheet(onDismissRequest = { showTocSheet = false }) {
+                    ModalBottomSheet(onDismissRequest = {
+                        showTocSheet = false
+                    }) {
                         TocAndBookmarksSheetContent(
                             epub = epub,
                             currentChapterIndex = currentChapterIndex,
@@ -979,6 +975,34 @@ fun ReaderScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReaderLoadingSkeleton(colors: ReaderColors) {
+    val transition = rememberInfiniteTransition(label = "readerSkeleton")
+    val shimmerAlpha by transition.animateFloat(
+        initialValue = 0.34f, targetValue = 0.72f,
+        animationSpec = infiniteRepeatable(animation = tween(850), repeatMode = RepeatMode.Reverse),
+        label = "readerSkeletonAlpha"
+    )
+    val blockColor = colors.mutedText.copy(alpha = shimmerAlpha * 0.22f)
+    Column(Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 30.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 92.dp, height = 18.dp).clip(RoundedCornerShape(8.dp)).background(blockColor))
+            Box(Modifier.size(42.dp).clip(CircleShape).background(blockColor))
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.fillMaxWidth(0.76f).height(30.dp).clip(RoundedCornerShape(9.dp)).background(blockColor))
+        Box(Modifier.fillMaxWidth(0.48f).height(16.dp).clip(RoundedCornerShape(8.dp)).background(blockColor))
+        Spacer(Modifier.height(18.dp))
+        repeat(11) { index ->
+            Box(Modifier.fillMaxWidth(if (index % 4 == 3) 0.62f else 1f)
+                .height(if (index % 5 == 0) 13.dp else 16.dp)
+                .clip(RoundedCornerShape(7.dp)).background(blockColor))
+        }
+        Spacer(Modifier.weight(1f))
+        Box(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(16.dp)).background(blockColor))
     }
 }
 
@@ -1093,9 +1117,15 @@ private fun PaginatedEpubReaderView(
             pagerState.currentPage,
             chapter.index,
             pageTokens,
-            liveResetSignal
+            liveResetSignal,
+            showSettingsSheet,
+            showTocSheet,
+            showLongPressMenu,
+            showHtmlExitConfirm
         ) {
-            if (!preferences.liveEnabled || !livePlaying) return@LaunchedEffect
+            if (!preferences.liveEnabled || !livePlaying ||
+                showSettingsSheet || showTocSheet || showLongPressMenu || showHtmlExitConfirm
+            ) return@LaunchedEffect
 
             // Wait until page transition animation finishes completely before advancing highlights!
             snapshotFlow {
