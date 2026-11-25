@@ -698,8 +698,8 @@ class UniversalBookConverter(private val context: Context) {
                     "image" -> {
                         val ref = node.attr("xlink:href").ifBlank { node.attr("href") }.removePrefix("#")
                         val asset = assetsById[ref]
-                        if (asset != null) body.append("<figure><img src=\\"").append(asset.path)
-                            .append("\\" alt=\\"").append(ref).append("\\"/></figure>\\n")
+                        if (asset != null) body.append("<figure><img src='").append(asset.path)
+                            .append("' alt='").append(ref).append("'/></figure>\n")
                     }
                     else -> node.text().trim().takeIf { it.isNotEmpty() }?.let {
                         body.append("<p>").append(org.jsoup.parser.Parser.unescapeEntities(it, false)
