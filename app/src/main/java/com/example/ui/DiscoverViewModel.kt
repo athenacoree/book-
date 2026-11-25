@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 sealed class CatalogLoadState {
     data object Loading : CatalogLoadState()
@@ -181,31 +182,43 @@ class DiscoverViewModel(application: Application) : AndroidViewModel(application
             gamesLoading.value = true
             gamesError.value = null
 
-            try {
-                val results = repository.searchOnlineCatalog(
-                    query = query,
-                    languageCode = language,
-                    topic = topic
-                )
-                loadState.value = CatalogLoadState.Success(results)
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                loadState.value = if (!repository.networkMonitor.isCurrentlyOnline()) {
-                    CatalogLoadState.Offline
-                } else {
-                    CatalogLoadState.Error(
-                        e.localizedMessage ?: "No se pudo cargar el catálogo de libros."
-                    )
+            // Load books and games at the same time so the slower catalog does not block the other.
+            supervisorScope {
+                launch {
+                    try {
+                        val results = repository.searchOnlineCatalog(
+                            query = query,
+                            languageCode = language,
+                            topic = topic
+                        )
+                        loadState.value = CatalogLoadState.Success(results)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        loadState.value = if (!repository.networkMonitor.isCurrentlyOnline()) {
+                            CatalogLoadState.Offline
+                        } else {
+                            CatalogLoadState.Error(
+                                e.localizedMessage ?: "No se pudo cargar el catálogo de libros."
+                            )
+                        }
+                    }
                 }
-            }
 
-            try {
-                games.value = repository.searchOnlineGames(query)
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
-            } finally {
-                if (currentCoroutineContext()[Job] === catalogRefreshJob) gamesLoading.value = false
+                launch {
+                    try {
+                        games.value = repository.searchOnlineGames(query)
+                        gamesError.value = null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        gamesError.value = e.localizedMessage ?: "No se pudo cargar el catálogo de juegos."
+                    } finally {
+                        if (currentCoroutineContext()[Job]?.parent == catalogRefreshJob) {
+                            gamesLoading.value = false
+                        }
+                    }
+                }
             }
         }
     }
