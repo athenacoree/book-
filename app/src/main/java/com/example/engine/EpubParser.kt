@@ -205,7 +205,7 @@ object EpubParser {
         var ncxId: String? = null
         var navHref: String? = null
         val interactiveDemoHrefs = mutableMapOf<String, String>()
-        val interactivePermissions = doc.select("meta[property=gitbook:permissions]")
+        val interactivePermissions = doc.getElementsByTag("meta").filter { it.attr("property").equals("gitbook:permissions", ignoreCase = true) }
             .flatMap { it.attr("content").ifBlank { it.text() }.split(Regex("[,\\s]+")) }
             .map { it.trim().lowercase() }
             .filter { it in setOf("network", "microphone", "camera") }
