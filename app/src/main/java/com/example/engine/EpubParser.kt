@@ -216,7 +216,8 @@ object EpubParser {
                 mediaTypes[id] = mediaType
                 if (props.contains("cover-image")) coverId = id
                 if (props.split(Regex("\\s+")).contains("nav")) navHref = decodedHref
-                if (props.split(Regex("\\s+")).contains("gitbook-interactive")) {
+                val propertyTokens = props.split(Regex("\\s+"))
+                if ("gitbook:interactive" in propertyTokens || "gitbook-interactive" in propertyTokens) {
                     val demoId = id.removePrefix("demo-").ifBlank { id }
                     interactiveDemoHrefs[demoId] = decodedHref
                     interactiveDemoHrefs[id] = decodedHref
