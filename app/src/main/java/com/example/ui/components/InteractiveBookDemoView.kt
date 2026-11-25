@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import android.graphics.Color as AndroidColor
-import android.net.Uri
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -14,12 +13,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -27,13 +28,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import com.example.engine.InteractiveDemoPackage
 import com.example.engine.ReaderBlock
 import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
- * Runs a publisher-bundled HTML example in an isolated virtual origin.
- * A WebView exists only while its block is actually visible in the reader.
+ * Extracts and runs a publisher-bundled example only while its block is visible.
+ * Each demo uses a virtual local origin; it has no file access or network access.
  */
 @Composable
 fun InteractiveBookDemoView(
@@ -41,7 +43,27 @@ fun InteractiveBookDemoView(
     isVisible: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var activeWebView by remember(demo.id, demo.htmlFilePath) { mutableStateOf<WebView?>(null) }
+    val extractionState by produceState(
+        initialValue = false to null as InteractiveDemoPackage.ExtractedBundle?,
+        demo.id,
+        demo.sourceEpubPath,
+        demo.entryPath,
+        demo.cacheDirPath,
+        isVisible
+    ) {
+        value = if (!isVisible || demo.cacheDirPath.isBlank()) {
+            false to null
+        } else {
+            true to InteractiveDemoPackage.extract(
+                sourceEpub = File(demo.sourceEpubPath),
+                entryPath = demo.entryPath,
+                cacheDir = File(demo.cacheDirPath),
+                demoId = demo.id
+            )
+        }
+    }
+    val extractedBundle = extractionState.second
+    var activeWebView by remember(demo.id, demo.entryPath) { mutableStateOf<WebView?>(null) }
 
     Column(
         modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -58,10 +80,9 @@ fun InteractiveBookDemoView(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp
         ) {
-            val htmlFile = File(demo.htmlFilePath)
-            val bundleRoot = File(demo.bundleRootPath)
-            if (isVisible && htmlFile.isFile && bundleRoot.isDirectory) {
-                DisposableEffect(demo.id, demo.htmlFilePath) {
+            if (isVisible && extractedBundle != null) {
+                val bundle = extractedBundle
+                DisposableEffect(demo.id, bundle.entryFile.absolutePath) {
                     onDispose {
                         activeWebView?.apply {
                             stopLoading()
@@ -92,12 +113,12 @@ fun InteractiveBookDemoView(
                                 loadsImagesAutomatically = true
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             }
-                            val canonicalRoot = bundleRoot.canonicalFile
+                            val canonicalRoot = bundle.rootDir.canonicalFile
                             val virtualPrefix = "/${demo.id}/"
                             fun resolveLocalAsset(rawPath: String?): File? {
                                 if (rawPath.isNullOrBlank()) return null
                                 return runCatching {
-                                    val decoded = Uri.decode(rawPath)
+                                    val decoded = android.net.Uri.decode(rawPath)
                                     if (!decoded.startsWith(virtualPrefix)) return@runCatching null
                                     val relative = decoded.removePrefix(virtualPrefix)
                                     if (relative.isBlank() || relative.split('/').any { it == ".." || it.isBlank() }) {
@@ -162,15 +183,14 @@ fun InteractiveBookDemoView(
                                 }
                             }
                             activeWebView = this
-                            tag = demo.htmlFilePath
-                            val entryName = htmlFile.name
-                            loadUrl("https://gitbook.local/${demo.id}/$entryName")
+                            tag = bundle.entryFile.absolutePath
+                            loadUrl("https://gitbook.local/${demo.id}/${bundle.entryFile.name}")
                         }
                     },
                     update = { view ->
-                        if (view.tag != demo.htmlFilePath) {
-                            view.tag = demo.htmlFilePath
-                            view.loadUrl("https://gitbook.local/${demo.id}/${htmlFile.name}")
+                        if (view.tag != bundle.entryFile.absolutePath) {
+                            view.tag = bundle.entryFile.absolutePath
+                            view.loadUrl("https://gitbook.local/${demo.id}/${bundle.entryFile.name}")
                         }
                     }
                 )
@@ -183,11 +203,15 @@ fun InteractiveBookDemoView(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (isVisible) "Esta demostración no se pudo cargar." else "La demostración se activará al llegar a esta parte.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (isVisible && !extractionState.first) {
+                        CircularProgressIndicator()
+                    } else {
+                        Text(
+                            text = if (isVisible) "No se pudo preparar esta demostración." else "La demostración se activará al llegar a esta parte.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
