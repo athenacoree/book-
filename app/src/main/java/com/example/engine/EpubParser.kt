@@ -88,7 +88,9 @@ object EpubParser {
                         html = html,
                         zip = zip,
                         chapterBaseDir = chapterBaseDir,
-                        imageCacheDir = resolvedImageDir
+                        imageCacheDir = resolvedImageDir,
+                        interactiveDemoHrefs = interactiveDemoHrefs,
+                        interactiveCacheDir = interactiveCacheDir
                     )
                     if (blocks.isNotEmpty()) {
                         chapters.add(
@@ -441,10 +443,13 @@ object EpubParser {
         manifest: Map<String, String>,
         cacheDir: File?
     ): ReaderBlock.InteractiveDemo? {
-        if (cacheDir == null || demoId.isBlank() || demoId.length > 80) return null
+        if (demoId.isBlank() || demoId.length > 80) return null
         val safeId = demoId.replace(Regex("[^A-Za-z0-9._-]"), "_")
         val cleanEntry = manifest[demoId] ?: manifest["demo-$demoId"] ?: return null
         if (cleanEntry.isBlank() || cleanEntry.startsWith("/")) return null
+        if (cacheDir == null) {
+            return ReaderBlock.InteractiveDemo(safeId, title.take(100), "", "")
+        }
         val relativeRoot = cleanEntry.substringBeforeLast('/', "")
         // Keep each demo's files in its own folder; never unpack an entire EPUB for one widget.
         if (relativeRoot.isBlank()) return null
