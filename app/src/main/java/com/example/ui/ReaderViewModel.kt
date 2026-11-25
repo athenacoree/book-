@@ -7,6 +7,7 @@ import com.example.data.BookEntity
 import com.example.data.BookRepository
 import com.example.data.BookmarkEntity
 import com.example.data.ReaderPreferences
+import com.example.data.BookReaderSettingsCodec
 import com.example.data.isHtmlGame
 import com.example.engine.EpubChapter
 import com.example.engine.HtmlOrientation
@@ -27,10 +28,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 sealed class ReaderLoadState {
@@ -49,12 +49,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     private val _bookmarks = MutableStateFlow<List<BookmarkEntity>>(emptyList())
     val bookmarks: StateFlow<List<BookmarkEntity>> = _bookmarks.asStateFlow()
 
-    val preferences: StateFlow<ReaderPreferences> = repository.preferencesRepository.preferences
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ReaderPreferences()
-        )
+    private val _preferences = MutableStateFlow(ReaderPreferences())
+    val preferences: StateFlow<ReaderPreferences> = _preferences.asStateFlow()
 
     private val _currentChapterIndex = MutableStateFlow(0)
     val currentChapterIndex: StateFlow<Int> = _currentChapterIndex.asStateFlow()
@@ -85,6 +81,8 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val book = repository.getBookById(bookId)
                     ?: throw IllegalStateException("Libro no encontrado en la biblioteca")
+                val defaults = repository.preferencesRepository.preferences.first()
+                _preferences.value = BookReaderSettingsCodec.decode(book.readerSettingsJson, defaults)
                 val parsed = if (book.isHtmlGame) {
                     try {
                         repository.loadParsedEpub(book)
@@ -200,79 +198,86 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setTheme(theme: ReaderTheme) {
-        viewModelScope.launch { repository.preferencesRepository.setReaderTheme(theme) }
+        updateBookReaderPreferences { _preferences.value.copy(readerTheme = theme) }
     }
 
     fun setFont(font: ReaderFont) {
-        viewModelScope.launch { repository.preferencesRepository.setReaderFont(font) }
+        updateBookReaderPreferences { _preferences.value.copy(readerFont = font) }
     }
 
     fun setFontSize(sizeSp: Float) {
-        viewModelScope.launch { repository.preferencesRepository.setFontSize(sizeSp) }
+        updateBookReaderPreferences { _preferences.value.copy(fontSizeSp = sizeSp.coerceIn(12f, 40f)) }
     }
 
     fun setLineSpacing(multiplier: Float) {
-        viewModelScope.launch { repository.preferencesRepository.setLineSpacing(multiplier) }
+        updateBookReaderPreferences { _preferences.value.copy(lineSpacingMultiplier = multiplier.coerceIn(1.2f, 2.2f)) }
     }
 
     fun setMargin(marginDp: Int) {
-        viewModelScope.launch { repository.preferencesRepository.setHorizontalMargin(marginDp) }
+        updateBookReaderPreferences { _preferences.value.copy(horizontalMarginDp = marginDp.coerceIn(8, 44)) }
     }
 
     fun setReadingMode(mode: ReadingMode) {
-        viewModelScope.launch { repository.preferencesRepository.setReadingMode(mode) }
+        updateBookReaderPreferences { _preferences.value.copy(readingMode = mode) }
     }
 
     fun setPageTransitionStyle(style: PageTransitionStyle) {
-        viewModelScope.launch { repository.preferencesRepository.setPageTransitionStyle(style) }
+        updateBookReaderPreferences { _preferences.value.copy(pageTransitionStyle = style) }
     }
 
     fun setPageTransitionDurationMs(durationMs: Int) {
-        viewModelScope.launch { repository.preferencesRepository.setPageTransitionDurationMs(durationMs) }
+        updateBookReaderPreferences { _preferences.value.copy(pageTransitionDurationMs = durationMs.coerceIn(260, 760)) }
     }
 
     fun setTapNavigationMode(mode: TapNavigationMode) {
-        viewModelScope.launch { repository.preferencesRepository.setTapNavigationMode(mode) }
+        updateBookReaderPreferences { _preferences.value.copy(tapNavigationMode = mode) }
     }
 
     fun setTextAlign(align: ReaderTextAlign) {
-        viewModelScope.launch { repository.preferencesRepository.setTextAlign(align) }
+        updateBookReaderPreferences { _preferences.value.copy(textAlign = align) }
     }
 
     fun setAmbientParticlesEnabled(enabled: Boolean) {
-        viewModelScope.launch { repository.preferencesRepository.setAmbientParticlesEnabled(enabled) }
+        updateBookReaderPreferences { _preferences.value.copy(ambientParticlesEnabled = enabled) }
     }
 
     fun setLiveEnabled(enabled: Boolean) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveEnabled(enabled) }
+        updateBookReaderPreferences { _preferences.value.copy(liveEnabled = enabled) }
     }
 
     fun setLiveUnitMode(unitMode: LiveUnitMode) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveUnitMode(unitMode) }
+        updateBookReaderPreferences { _preferences.value.copy(liveUnitMode = unitMode) }
     }
 
     fun setLiveWpm(wpm: Int) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveWpm(wpm) }
+        updateBookReaderPreferences { _preferences.value.copy(liveWpm = wpm.coerceIn(60, 480)) }
     }
 
     fun setLivePhraseTempoMultiplier(multiplier: Float) {
-        viewModelScope.launch { repository.preferencesRepository.setLivePhraseTempoMultiplier(multiplier) }
+        updateBookReaderPreferences { _preferences.value.copy(livePhraseTempoMultiplier = multiplier.coerceIn(0.6f, 2.4f)) }
     }
 
     fun setLiveScaleFactor(scale: Float) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveScaleFactor(scale) }
+        updateBookReaderPreferences { _preferences.value.copy(liveScaleFactor = scale.coerceIn(1.08f, 1.42f)) }
     }
 
     fun setLiveHighlightStyle(style: LiveHighlightStyle) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveHighlightStyle(style) }
+        updateBookReaderPreferences { _preferences.value.copy(liveHighlightStyle = style) }
     }
 
     fun setLiveAutoTurnPages(autoTurn: Boolean) {
-        viewModelScope.launch { repository.preferencesRepository.setLiveAutoTurnPages(autoTurn) }
+        updateBookReaderPreferences { _preferences.value.copy(liveAutoTurnPages = autoTurn) }
     }
 
     fun setLivePunctuationPause(pause: Boolean) {
-        viewModelScope.launch { repository.preferencesRepository.setLivePunctuationPause(pause) }
+        updateBookReaderPreferences { _preferences.value.copy(livePunctuationPause = pause) }
+    }
+
+    private fun updateBookReaderPreferences(transform: (ReaderPreferences) -> ReaderPreferences) {
+        val ready = _loadState.value as? ReaderLoadState.Ready ?: return
+        val updated = transform(_preferences.value)
+        _preferences.value = updated
+        viewModelScope.launch { repository.saveReaderSettings(ready.book.id, BookReaderSettingsCodec.encode(updated)) }
     }
 
     fun setHtmlGameNotificationsEnabled(enabled: Boolean) {
