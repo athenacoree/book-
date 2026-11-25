@@ -73,7 +73,7 @@ fun InteractiveBookDemoView(
     val virtualHost = remember(demo.sourceEpubPath, demo.id) {
         "demo-${(demo.sourceEpubPath + "|" + demo.id).hashCode().toUInt()}.gitbook.local"
     }
-    var activeWebView by remember(demo.id, demo.entryPath) { mutableStateOf<WebView?>(null) }
+    val activeWebView = remember(demo.id, demo.entryPath) { mutableStateOf<WebView?>(null) }
 
     Column(
         modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
@@ -94,12 +94,12 @@ fun InteractiveBookDemoView(
                 val bundle = extractedBundle
                 DisposableEffect(demo.id, bundle.entryFile.absolutePath) {
                     onDispose {
-                        activeWebView?.apply {
+                        activeWebView.value?.apply {
                             stopLoading()
                             loadUrl("about:blank")
                             destroy()
                         }
-                        activeWebView = null
+                        activeWebView.value = null
                     }
                 }
                 AndroidView(
@@ -192,7 +192,7 @@ fun InteractiveBookDemoView(
                                     return blockedResponse(403)
                                 }
                             }
-                            activeWebView = this
+                            activeWebView.value = this
                             tag = bundle.entryFile.absolutePath
                             loadUrl("https://$virtualHost/${demo.id}/${bundle.entryFile.name}")
                         }
