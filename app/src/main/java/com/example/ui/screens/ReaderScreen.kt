@@ -272,7 +272,8 @@ fun ReaderScreen(
         livePlaying = false
         showControls = false
         showLongPressMenu = false
-        openSettings(tab)
+        initialSettingsTab = tab
+        showSettingsSheet = true
     }
 
     fun openTableOfContents() {
