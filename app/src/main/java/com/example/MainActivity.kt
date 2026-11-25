@@ -453,6 +453,7 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                             onSelectChapter = readerViewModel::selectChapter,
                             onUpdatePage = readerViewModel::updatePage,
                             onAddBookmark = readerViewModel::addBookmark,
+                            onAddAnnotation = readerViewModel::addAnnotation,
                             onDeleteBookmark = readerViewModel::deleteBookmark,
                             onTogglePdfMode = readerViewModel::togglePdfOriginalMode,
                             onSetTheme = readerViewModel::setTheme,

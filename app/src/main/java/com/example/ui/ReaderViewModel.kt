@@ -187,6 +187,15 @@ class ReaderViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun addAnnotation(excerpt: String, note: String) {
+        val ready = _loadState.value as? ReaderLoadState.Ready ?: return
+        val chapterIdx = _currentChapterIndex.value
+        val chapterTitle = ready.epub.chapters.getOrNull(chapterIdx)?.title ?: "Capítulo ${chapterIdx + 1}"
+        viewModelScope.launch {
+            repository.addBookmark(ready.book.id, chapterIdx, chapterTitle, _currentPageIndex.value, excerpt, note)
+        }
+    }
+
     fun deleteBookmark(bookmarkId: Long) {
         viewModelScope.launch {
             repository.deleteBookmark(bookmarkId)

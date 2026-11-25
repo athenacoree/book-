@@ -158,7 +158,8 @@ class BookRepository(context: Context) {
         chapterIndex: Int,
         chapterTitle: String,
         pageIndex: Int,
-        excerpt: String
+        excerpt: String,
+        note: String = ""
     ) {
         dao.insertBookmark(
             BookmarkEntity(
@@ -166,7 +167,8 @@ class BookRepository(context: Context) {
                 chapterIndex = chapterIndex,
                 chapterTitle = chapterTitle,
                 pageIndex = pageIndex,
-                excerpt = excerpt.take(120)
+                excerpt = excerpt.take(120),
+                note = note.take(600)
             )
         )
     }

@@ -219,6 +219,7 @@ fun ReaderScreen(
     onSelectChapter: (Int, Int) -> Unit,
     onUpdatePage: (Int, Int) -> Unit,
     onAddBookmark: (String) -> Unit,
+    onAddAnnotation: (String, String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onTogglePdfMode: () -> Unit,
     onSetTheme: (ReaderTheme) -> Unit,
@@ -260,6 +261,8 @@ fun ReaderScreen(
     var showTocSheet by remember { mutableStateOf(false) }
     var currentPageExcerpt by remember { mutableStateOf("") }
     var bookmarkSavedToast by remember { mutableStateOf(false) }
+    var showAnnotationDialog by remember { mutableStateOf(false) }
+    var annotationDraft by remember { mutableStateOf("") }
     var livePlaying by remember { mutableStateOf(true) }
     var liveResetSignal by remember { mutableIntStateOf(0) }
     var totalPagesCurrentChapter by remember { mutableIntStateOf(1) }
@@ -845,6 +848,39 @@ fun ReaderScreen(
                     }
                 }
 
+        if (showAnnotationDialog) {
+            AlertDialog(
+                onDismissRequest = { showAnnotationDialog = false; annotationDraft = "" },
+                title = { Text("Añadir anotación") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("La nota quedará guardada en este libro y en esta página.")
+                        OutlinedTextField(
+                            value = annotationDraft,
+                            onValueChange = { annotationDraft = it.take(600) },
+                            placeholder = { Text("Explicación, comentario o recordatorio…") },
+                            minLines = 3,
+                            maxLines = 6
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = annotationDraft.isNotBlank(),
+                        onClick = {
+                            onAddAnnotation(currentPageExcerpt, annotationDraft.trim())
+                            showAnnotationDialog = false
+                            annotationDraft = ""
+                            bookmarkSavedToast = true
+                        }
+                    ) { Text("Guardar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAnnotationDialog = false; annotationDraft = "" }) { Text("Cancelar") }
+                }
+            )
+        }
+
                 // Long-Press Quick Control Overlay inside Book
                 LongPressQuickMenuOverlay(
                     visible = showLongPressMenu,
@@ -864,6 +900,7 @@ fun ReaderScreen(
                     onSetTheme = onSetTheme,
                     onSetPageTransitionStyle = onSetPageTransitionStyle,
                     onAddBookmark = { triggerAddBookmark() },
+                    onAddAnnotation = { showAnnotationDialog = true },
                     onOpenToc = { openTableOfContents() },
                     onOpenFullSettings = { tab ->
                         openSettings(tab)

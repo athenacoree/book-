@@ -48,6 +48,7 @@ data class BookmarkEntity(
     val chapterTitle: String,
     val pageIndex: Int,
     val excerpt: String,
+    @ColumnInfo(defaultValue = "''") val note: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

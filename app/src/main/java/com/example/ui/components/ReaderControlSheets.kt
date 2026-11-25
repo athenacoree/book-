@@ -214,6 +214,7 @@ fun LongPressQuickMenuOverlay(
     onSetTheme: (ReaderTheme) -> Unit,
     onSetPageTransitionStyle: (PageTransitionStyle) -> Unit,
     onAddBookmark: () -> Unit,
+    onAddAnnotation: () -> Unit,
     onOpenToc: () -> Unit,
     onOpenFullSettings: (Int) -> Unit
 ) {
@@ -478,6 +479,18 @@ fun LongPressQuickMenuOverlay(
                             Icon(Icons.Filled.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Marcador", style = MaterialTheme.typography.labelMedium)
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                onDismiss()
+                                onAddAnnotation()
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)
+                        ) {
+                            Icon(Icons.Filled.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Anotar", style = MaterialTheme.typography.labelMedium)
                         }
                         OutlinedButton(
                             onClick = {
@@ -1824,7 +1837,7 @@ fun TocAndBookmarksSheetContent(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = bm.excerpt,
+                                        text = if (bm.note.isNotBlank()) "${bm.excerpt}\nNota: ${bm.note}" else bm.excerpt,
                                         style = MaterialTheme.typography.bodySmall,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
