@@ -90,7 +90,8 @@ sealed class ReaderBlock {
         val title: String,
         val sourceEpubPath: String,
         val entryPath: String,
-        val cacheDirPath: String
+        val cacheDirPath: String,
+        val permissions: Set<String> = emptySet()
     ) : ReaderBlock()
     data object Divider : ReaderBlock()
 }
