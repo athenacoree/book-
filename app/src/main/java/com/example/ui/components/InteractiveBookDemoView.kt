@@ -19,6 +19,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -41,8 +42,14 @@ import java.io.File
 fun InteractiveBookDemoView(
     demo: ReaderBlock.InteractiveDemo,
     isVisible: Boolean,
+    livePlaying: Boolean,
+    onPauseLive: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    LaunchedEffect(isVisible, livePlaying) {
+        if (isVisible && livePlaying) onPauseLive()
+    }
+
     val extractionState by produceState(
         initialValue = false to null as InteractiveDemoPackage.ExtractedBundle?,
         demo.id,
