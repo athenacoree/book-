@@ -167,8 +167,10 @@ fun InteractiveBookDemoView(
                                     request: WebResourceRequest
                                 ): Boolean {
                                     val uri = request.url
-                                    return !(uri.scheme == "https" && uri.host == virtualHost &&
-                                        uri.path.orEmpty().startsWith(virtualPrefix))
+                                    val isLocalDemo = uri.scheme == "https" && uri.host == virtualHost &&
+                                        uri.path.orEmpty().startsWith(virtualPrefix)
+                                    val isPermittedRemote = "network" in demo.permissions && uri.scheme == "https"
+                                    return !(isLocalDemo || isPermittedRemote)
                                 }
 
                                 override fun shouldInterceptRequest(
@@ -189,6 +191,7 @@ fun InteractiveBookDemoView(
                                         }.getOrElse { blockedResponse(404) }
                                     }
                                     if (uri.scheme == "data" || uri.scheme == "blob" || uri.scheme == "about") return null
+                                    if ("network" in demo.permissions && uri.scheme == "https") return null
                                     return blockedResponse(403)
                                 }
                             }
