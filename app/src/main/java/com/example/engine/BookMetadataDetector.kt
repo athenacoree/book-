@@ -163,7 +163,7 @@ object BookMetadataDetector {
                     is ReaderBlock.Paragraph -> words += WORD_REGEX.findAll(block.text).count()
                     is ReaderBlock.Quote -> words += WORD_REGEX.findAll(block.text).count()
                     is ReaderBlock.ImageBlock -> images++
-                    ReaderBlock.Divider -> Unit
+                    is ReaderBlock.InteractiveDemo, ReaderBlock.Divider -> Unit
                 }
             }
         }
