@@ -463,6 +463,10 @@ fun ReaderScreen(
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             showLongPressMenu = true
                         },
+                        initialPageIndex = currentPageIndex,
+                        onUpdatePage = { pageIdx, totalBlocks ->
+                            onUpdatePage(pageIdx, totalBlocks.coerceAtLeast(1))
+                        },
                         onToggleLivePlay = { livePlaying = !livePlaying },
                         onOpenLiveSettings = {
                             openSettings(2)
@@ -892,7 +896,11 @@ fun ReaderScreen(
                             onSetTextAlign = onSetTextAlign,
                             onSetAmbientParticlesEnabled = onSetAmbientParticlesEnabled,
                             onSetLiveEnabled = onSetLiveEnabled,
-                            onToggleLivePlay = { livePlaying = !livePlaying },
+                            onToggleLivePlay = {
+                                // Resume from the settings sheet only after it closes.
+                                livePlaying = true
+                                showSettingsSheet = false
+                            },
                             onRestartLivePage = { liveResetSignal++ },
                             onSetLiveUnitMode = onSetLiveUnitMode,
                             onSetLiveWpm = onSetLiveWpm,
@@ -2357,6 +2365,8 @@ private fun ScrollEpubReaderView(
     livePlaying: Boolean,
     liveResetSignal: Int,
     showTopToolbar: Boolean,
+    initialPageIndex: Int,
+    onUpdatePage: (Int, Int) -> Unit,
     onPreviousChapter: () -> Unit,
     onNextChapter: () -> Unit,
     onToggleControls: () -> Unit,
@@ -2367,7 +2377,15 @@ private fun ScrollEpubReaderView(
 ) {
     val fontFamily = resolveFontFamily(preferences.readerFont)
     val align = if (preferences.textAlign == ReaderTextAlign.JUSTIFY) TextAlign.Justify else TextAlign.Start
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialPageIndex.coerceIn(0, (chapter.blocks.size - 1).coerceAtLeast(0))
+    )
+
+    LaunchedEffect(listState, chapter.index, chapter.blocks.size) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { visibleBlockIndex ->
+            onUpdatePage(visibleBlockIndex, chapter.blocks.size.coerceAtLeast(1))
+        }
+    }
 
     val scrollTokens = remember(chapter, preferences.liveUnitMode) {
         val list = mutableListOf<LiveToken>()
