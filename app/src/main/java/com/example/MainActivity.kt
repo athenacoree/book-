@@ -85,6 +85,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.engine.AppThemeMode
 import com.example.ui.DiscoverViewModel
 import com.example.ui.LibraryViewModel
 import com.example.ui.ReaderViewModel
