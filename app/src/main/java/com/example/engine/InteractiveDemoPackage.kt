@@ -38,7 +38,8 @@ object InteractiveDemoPackage {
         val canonicalCacheDir = cacheDir.canonicalFile
         canonicalCacheDir.mkdirs()
         val sourceIdentity = sourceEpub.canonicalPath.hashCode().toUInt()
-        val cacheKey = "${safeId}_${sourceIdentity}_${sourceEpub.lastModified()}_${sourceEpub.length()}"
+        val permissionIdentity = permissions.sorted().joinToString("_")
+        val cacheKey = "${safeId}_${sourceIdentity}_${sourceEpub.lastModified()}_${sourceEpub.length()}_${permissionIdentity.hashCode()}"
         val root = File(canonicalCacheDir, cacheKey)
         require(root.canonicalPath.startsWith(canonicalCacheDir.path + File.separator)) {
             "Ruta de caché no válida"
