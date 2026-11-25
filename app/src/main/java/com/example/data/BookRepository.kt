@@ -145,6 +145,7 @@ class BookRepository(context: Context) {
     suspend fun deleteBook(book: BookEntity) = withContext(Dispatchers.IO) {
         dao.deleteBookmarksForBook(book.id)
         dao.deleteBookById(book.id)
+        File(appContext.cacheDir, "epub_images/" + book.id).deleteRecursively()
         converter.deleteBookFiles(book.epubPath, book.originalPath, book.coverPath)
     }
 
