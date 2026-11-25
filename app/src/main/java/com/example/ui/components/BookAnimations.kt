@@ -727,13 +727,13 @@ fun BookOpening3DOverlay(
                                             else -> Icons.Filled.Schedule
                                         },
                                         contentDescription = null,
-                                        tint = Color(0xFFB8AFA3),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Text(
                                         text = extraMeta.joinToString(" · "),
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFFCFC7BC),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -744,7 +744,7 @@ fun BookOpening3DOverlay(
                                 Text(
                                     text = book.description,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFFE7DFD3),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = if (expandDescription) 8 else 3,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.clickable { expandDescription = !expandDescription }
@@ -875,7 +875,7 @@ private fun PreviewStatBadge(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = Color(0xFFB8AFA3)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
