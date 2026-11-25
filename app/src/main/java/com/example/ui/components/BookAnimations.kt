@@ -393,16 +393,23 @@ fun BookOpening3DOverlay(
                     .width(176.dp)
                     .height(254.dp)
                     .pointerInput(book.id, previewPages.size) {
-                        detectHorizontalDragGestures { change, dragAmount ->
-                            change.consume()
-                            if (kotlin.math.abs(dragAmount) > 12f && previewPages.isNotEmpty()) {
-                                previewPageIndex = if (dragAmount < 0f) {
-                                    (previewPageIndex + 1).coerceAtMost(previewPages.lastIndex)
-                                } else {
-                                    (previewPageIndex - 1).coerceAtLeast(-1)
+                        var accumulatedDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { accumulatedDrag = 0f },
+                            onDragEnd = {
+                                if (kotlin.math.abs(accumulatedDrag) > 42f && previewPages.isNotEmpty()) {
+                                    previewPageIndex = if (accumulatedDrag < 0f) {
+                                        (previewPageIndex + 1).coerceAtMost(previewPages.lastIndex)
+                                    } else {
+                                        (previewPageIndex - 1).coerceAtLeast(-1)
+                                    }
                                 }
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                accumulatedDrag += dragAmount
+                                change.consume()
                             }
-                        }
+                        )
                     }
                     .graphicsLayer {
                         scaleX = cardScale
