@@ -227,3 +227,86 @@ fun InteractiveBookDemoView(
         }
     }
 }
+
+
+/** Official YouTube iframe player, instantiated only when the video block is visible. */
+@Composable
+fun YouTubeBookVideoView(
+    video: ReaderBlock.YouTubeVideo,
+    isVisible: Boolean,
+    livePlaying: Boolean,
+    onPauseLive: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LaunchedEffect(isVisible, livePlaying) { if (isVisible && livePlaying) onPauseLive() }
+    val webViewRef = remember(video.videoId) { mutableStateOf<WebView?>(null) }
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(video.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+            if (isVisible) {
+                DisposableEffect(video.videoId) {
+                    onDispose {
+                        webViewRef.value?.apply { stopLoading(); loadUrl("about:blank"); destroy() }
+                        webViewRef.value = null
+                    }
+                }
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    factory = { context ->
+                        WebView(context).apply {
+                            setBackgroundColor(AndroidColor.BLACK)
+                            isVerticalScrollBarEnabled = false
+                            isHorizontalScrollBarEnabled = false
+                            settings.apply {
+                                javaScriptEnabled = true
+                                domStorageEnabled = true
+                                allowFileAccess = false
+                                allowContentAccess = false
+                                javaScriptCanOpenWindowsAutomatically = false
+                                setSupportMultipleWindows(false)
+                                mediaPlaybackRequiresUserGesture = true
+                                loadsImagesAutomatically = true
+                                mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                            }
+                            val hosts = listOf("youtube.com", "youtube-nocookie.com", "youtu.be", "ytimg.com", "googlevideo.com", "google.com", "googleapis.com", "gstatic.com", "ggpht.com")
+                            fun allowed(host: String?): Boolean {
+                                val h = host.orEmpty().lowercase()
+                                return hosts.any { h == it || h.endsWith(".$it") }
+                            }
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                    if (!request.isForMainFrame) return false
+                                    return request.url.scheme != "https" || !allowed(request.url.host)
+                                }
+                                override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                                    val uri = request.url
+                                    if (uri.scheme == "https" && allowed(uri.host)) return null
+                                    return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+                                }
+                            }
+                            webViewRef.value = this
+                            val html = """
+                                <!doctype html><html><head>
+                                <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                                <style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}
+                                iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>
+                                </head><body>
+                                <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID_HERE?playsinline=1&amp;rel=0"
+                                title="YouTube video player"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                                </body></html>
+                            """.trimIndent().replace("VIDEO_ID_HERE", video.videoId)
+                            loadDataWithBaseURL("https://www.youtube-nocookie.com/", html, "text/html", "UTF-8", null)
+                        }
+                    },
+                    update = { }
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxWidth().height(112.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {
+                    Text("El vídeo se cargará al llegar a esta parte del libro.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
