@@ -94,6 +94,7 @@ import com.example.ui.screens.DiscoverScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.ReaderScreen
 import com.example.ui.theme.LuminaBookTheme
+import com.example.engine.AppThemeMode
 
 private object Routes {
     const val LIBRARY = "library"
@@ -201,14 +202,10 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
         }
     }
 
-    val singleConvertLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            libraryViewModel.importBooks(listOf(uri)) { convertedBook ->
-                navController.navigate(Routes.reader(convertedBook.id))
-            }
-        }
+    val converterImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) libraryViewModel.importBooks(uris)
     }
 
     val supportedMimeTypes = arrayOf(
@@ -325,7 +322,7 @@ fun LuminaBookApp(incomingFileUri: Uri? = null) {
                         ConverterScreen(
                             uiState = libraryState,
                             onPickFileToConvert = {
-                                singleConvertLauncher.launch(supportedMimeTypes)
+                                converterImportLauncher.launch(supportedMimeTypes)
                             },
                             onOpenBook = { book ->
                                 navController.navigate(Routes.reader(book.id))
