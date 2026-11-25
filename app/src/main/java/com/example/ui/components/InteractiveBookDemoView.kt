@@ -33,8 +33,8 @@ import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
- * Runs a publisher-bundled HTML example in a restricted local WebView.
- * The view is only created while its block is visible in the reader.
+ * Runs a publisher-bundled HTML example in an isolated virtual origin.
+ * A WebView exists only while its block is actually visible in the reader.
  */
 @Composable
 fun InteractiveBookDemoView(
@@ -46,9 +46,7 @@ fun InteractiveBookDemoView(
     var activeWebView by remember(demo.id, demo.htmlFilePath) { mutableStateOf<WebView?>(null) }
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
@@ -62,7 +60,9 @@ fun InteractiveBookDemoView(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp
         ) {
-            if (isVisible && File(demo.htmlFilePath).isFile && File(demo.bundleRootPath).isDirectory) {
+            val htmlFile = File(demo.htmlFilePath)
+            val bundleRoot = File(demo.bundleRootPath)
+            if (isVisible && htmlFile.isFile && bundleRoot.isDirectory) {
                 DisposableEffect(demo.id, demo.htmlFilePath) {
                     onDispose {
                         activeWebView?.apply {
@@ -74,9 +74,7 @@ fun InteractiveBookDemoView(
                     }
                 }
                 AndroidView(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(340.dp),
+                    modifier = Modifier.fillMaxWidth().height(340.dp),
                     factory = { viewContext ->
                         WebView(viewContext).apply {
                             setBackgroundColor(AndroidColor.WHITE)
@@ -86,36 +84,62 @@ fun InteractiveBookDemoView(
                             settings.apply {
                                 javaScriptEnabled = true
                                 domStorageEnabled = true
-                                allowFileAccess = true
+                                allowFileAccess = false
                                 allowContentAccess = false
                                 allowFileAccessFromFileURLs = false
                                 allowUniversalAccessFromFileURLs = false
                                 javaScriptCanOpenWindowsAutomatically = false
                                 setSupportMultipleWindows(false)
                                 mediaPlaybackRequiresUserGesture = true
-                                blockNetworkLoads = true
                                 loadsImagesAutomatically = true
                                 mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             }
-                            val root = File(demo.bundleRootPath).canonicalFile
-                            fun isInsideBundle(rawPath: String?): Boolean {
-                                if (rawPath.isNullOrBlank()) return false
+                            val canonicalRoot = bundleRoot.canonicalFile
+                            val virtualPrefix = "/${demo.id}/"
+                            fun resolveLocalAsset(rawPath: String?): File? {
+                                if (rawPath.isNullOrBlank()) return null
                                 return runCatching {
-                                    val candidate = File(Uri.decode(rawPath)).canonicalFile
-                                    candidate.path == root.path || candidate.path.startsWith(root.path + File.separator)
-                                }.getOrDefault(false)
+                                    val decoded = Uri.decode(rawPath)
+                                    if (!decoded.startsWith(virtualPrefix)) return@runCatching null
+                                    val relative = decoded.removePrefix(virtualPrefix)
+                                    if (relative.isBlank() || relative.split('/').any { it == ".." || it.isBlank() }) {
+                                        return@runCatching null
+                                    }
+                                    val candidate = File(canonicalRoot, relative).canonicalFile
+                                    if (candidate.path.startsWith(canonicalRoot.path + File.separator) && candidate.isFile) candidate else null
+                                }.getOrNull()
                             }
+                            fun mimeType(file: File): String {
+                                return when (file.extension.lowercase()) {
+                                    "html", "htm" -> "text/html"
+                                    "css" -> "text/css"
+                                    "js", "mjs" -> "application/javascript"
+                                    "json" -> "application/json"
+                                    "svg" -> "image/svg+xml"
+                                    "png" -> "image/png"
+                                    "jpg", "jpeg" -> "image/jpeg"
+                                    "webp" -> "image/webp"
+                                    "gif" -> "image/gif"
+                                    "woff" -> "font/woff"
+                                    "woff2" -> "font/woff2"
+                                    "ttf" -> "font/ttf"
+                                    "otf" -> "font/otf"
+                                    else -> "application/octet-stream"
+                                }
+                            }
+                            fun blockedResponse(status: Int = 403) = WebResourceResponse(
+                                "text/plain", "UTF-8", status,
+                                if (status == 404) "Not found" else "Blocked by GITBOOK",
+                                emptyMap(), ByteArrayInputStream(ByteArray(0))
+                            )
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(
                                     view: WebView,
                                     request: WebResourceRequest
                                 ): Boolean {
                                     val uri = request.url
-                                    return when (uri.scheme?.lowercase()) {
-                                        "file" -> !isInsideBundle(uri.path)
-                                        "about" -> uri.toString() != "about:blank"
-                                        else -> true
-                                    }
+                                    return !(uri.scheme == "https" && uri.host == "gitbook.local" &&
+                                        uri.path.orEmpty().startsWith(virtualPrefix))
                                 }
 
                                 override fun shouldInterceptRequest(
@@ -123,30 +147,32 @@ fun InteractiveBookDemoView(
                                     request: WebResourceRequest
                                 ): WebResourceResponse? {
                                     val uri = request.url
-                                    val allowed = when (uri.scheme?.lowercase()) {
-                                        "file" -> isInsideBundle(uri.path)
-                                        "data", "blob", "about" -> true
-                                        else -> false
+                                    if (uri.scheme == "https" && uri.host == "gitbook.local") {
+                                        val asset = resolveLocalAsset(uri.path)
+                                            ?: return blockedResponse(404)
+                                        return runCatching {
+                                            val mime = mimeType(asset)
+                                            WebResourceResponse(
+                                                mime,
+                                                if (mime.startsWith("text/") || mime.contains("javascript") || mime.contains("json")) "UTF-8" else null,
+                                                200, "OK", emptyMap(), asset.inputStream()
+                                            )
+                                        }.getOrElse { blockedResponse(404) }
                                     }
-                                    return if (allowed) null else WebResourceResponse(
-                                        "text/plain",
-                                        "UTF-8",
-                                        403,
-                                        "Blocked by GITBOOK",
-                                        emptyMap(),
-                                        ByteArrayInputStream(ByteArray(0))
-                                    )
+                                    if (uri.scheme == "data" || uri.scheme == "blob" || uri.scheme == "about") return null
+                                    return blockedResponse(403)
                                 }
                             }
                             activeWebView = this
                             tag = demo.htmlFilePath
-                            loadUrl(Uri.fromFile(File(demo.htmlFilePath)).toString())
+                            val entryName = htmlFile.name
+                            loadUrl("https://gitbook.local/${demo.id}/$entryName")
                         }
                     },
                     update = { view ->
                         if (view.tag != demo.htmlFilePath) {
                             view.tag = demo.htmlFilePath
-                            view.loadUrl(Uri.fromFile(File(demo.htmlFilePath)).toString())
+                            view.loadUrl("https://gitbook.local/${demo.id}/${htmlFile.name}")
                         }
                     }
                 )
