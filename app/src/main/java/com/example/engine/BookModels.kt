@@ -84,6 +84,12 @@ sealed class ReaderBlock {
     data class Paragraph(val text: String) : ReaderBlock()
     data class Quote(val text: String) : ReaderBlock()
     data class ImageBlock(val imagePath: String, val caption: String = "") : ReaderBlock()
+    data class InteractiveDemo(
+        val id: String,
+        val title: String,
+        val htmlFilePath: String,
+        val bundleRootPath: String
+    ) : ReaderBlock()
     data object Divider : ReaderBlock()
 }
 
