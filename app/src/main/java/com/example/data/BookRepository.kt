@@ -280,28 +280,8 @@ class BookRepository(context: Context) {
     suspend fun downloadOnlineBook(book: GutendexBook): BookEntity {
         val localId = "gut-${book.id}"
         dao.getBookById(localId)?.let { return it }
-        val epubUrl = book.formats["application/epub+zip"]
-            ?: book.formats.entries.firstOrNull { it.key.contains("epub", ignoreCase = true) }?.value
-        if (epubUrl == null) {
-            val pdfUrl = book.formats["application/pdf"]
-                ?: throw IllegalStateException("No hay un archivo EPUB o PDF disponible")
-            val pdfBytes = onlineCatalog.downloadBytes(pdfUrl)
-            val temporaryPdf = File(appContext.cacheDir, "catalog-${localId}.pdf")
-            try {
-                temporaryPdf.writeBytes(pdfBytes)
-                val uri = FileProvider.getUriForFile(
-                    appContext,
-                    "${appContext.packageName}.fileprovider",
-                    temporaryPdf
-                )
-                val converted = converter.importAndConvert(uri)
-                val entity = converted.toEntity()
-                dao.insertBook(entity)
-                return entity
-            } finally {
-                temporaryPdf.delete()
-            }
-        }
+        val epubUrl = book.epubDownloadUrl
+            ?: throw IllegalStateException("No hay descarga EPUB disponible")
         val epubBytes = onlineCatalog.downloadBytes(epubUrl)
         val coverBytes = book.coverImageUrl?.let { url ->
             try {
