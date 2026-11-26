@@ -1,0 +1,87 @@
+name: Build Noches Blancas EPUB
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-noches-blancas-epub.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-epub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download the supplied edition and convert it to EPUB
+        run: |
+          pip install pymupdf
+          curl -fL "https://bibliotecadigital.ilce.edu.mx/Colecciones/ObrasClasicas/_docs/NochesBlancas.pdf" -o /tmp/noches-blancas.pdf
+          python - <<'PY'
+          import fitz, re, html, zipfile, uuid, datetime, os
+          doc = fitz.open("/tmp/noches-blancas.pdf")
+          pages = []
+          for i, page in enumerate(doc):
+              if i == 0:
+                  continue
+              lines = [re.sub(r"\\s+", " ", x).strip() for x in page.get_text("text").splitlines()]
+              lines = [x for x in lines if x and not re.search(r"bibliotecadigital\\.ilce\\.edu\\.mx", x, re.I)]
+              lines = [x for x in lines if not re.fullmatch(r"\\d{1,3}", x) and x.upper() not in {"NOCHES BLANCAS", "DOSTOIEVSKI"}]
+              text = re.sub(r"\\s+", " ", " ".join(lines)).strip()
+              if text:
+                  pages.append(text)
+          full = "\\n".join(pages)
+          headings = ["PRIMERA NOCHE", "SEGUNDA NOCHE", "HISTORIA DE NÁSTENKA", "TERCERA NOCHE", "CUARTA NOCHE", "LA MAÑANA"]
+          for h in headings:
+              full = re.sub(r"\\s*" + re.escape(h) + r"\\s*", "\\n\\n@@"+h+"@@\\n\\n", full, flags=re.I)
+          chunks = re.split(r"\\n\\n@@(.*?)@@\\n\\n", full)
+          sections = []
+          if chunks[0].strip():
+              sections.append(("Inicio", chunks[0].strip()))
+          for i in range(1, len(chunks), 2):
+              sections.append((chunks[i].title(), chunks[i+1].strip() if i+1 < len(chunks) else ""))
+          if not sections:
+              sections = [("Noches blancas", full)]
+          os.makedirs("catalog/books", exist_ok=True)
+          out = "catalog/books/noches-blancas.epub"
+          uid = str(uuid.uuid4())
+          nav, manifest, spine = [], [], []
+          content_files = []
+          for i, (title, body) in enumerate(sections, 1):
+              paragraphs = re.split(r"(?<=[.!?…])\\s+(?=[—A-ZÁÉÍÓÚÜ¿¡])", body)
+              body_html = "".join("<p>"+html.escape(p.strip())+"</p>" for p in paragraphs if p.strip())
+              name = f"chapter{i}.xhtml"
+              xhtml = f'<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="es"><head><title>{html.escape(title)}</title><meta charset="utf-8"/><link rel="stylesheet" href="style.css"/></head><body><h1>{html.escape(title)}</h1>{body_html}</body></html>'
+              content_files.append((name, xhtml))
+              nav.append(f'<li><a href="{name}">{html.escape(title)}</a></li>')
+              manifest.append(f'<item id="c{i}" href="{name}" media-type="application/xhtml+xml"/>')
+              spine.append(f'<itemref idref="c{i}"/>')
+          nav_xhtml = '<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="es"><head><title>Índice</title></head><body><nav epub:type="toc" id="toc"><h1>Índice</h1><ol>'+''.join(nav)+'</ol></nav></body></html>'
+          opf = '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="uid" xml:lang="es"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="uid">urn:uuid:'+uid+'</dc:identifier><dc:title>Noches blancas</dc:title><dc:creator>Fiódor Dostoyevski</dc:creator><dc:language>es</dc:language><dc:description>Edición en español convertida desde la edición PDF de Biblioteca Digital ILCE.</dc:description><meta property="dcterms:modified">'+datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")+'</meta></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="css" href="style.css" media-type="text/css"/> '+''.join(manifest)+'</manifest><spine>'+''.join(spine)+'</spine></package>'
+          with zipfile.ZipFile(out, "w") as z:
+              z.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+              z.writestr("META-INF/container.xml", '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>', compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+              z.writestr("OEBPS/content.opf", opf, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+              z.writestr("OEBPS/nav.xhtml", nav_xhtml, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+              z.writestr("OEBPS/style.css", "body{font-family:serif;line-height:1.55;margin:5%;}h1{text-align:center;margin:1.5em 0;}p{text-indent:1.2em;margin:.4em 0;text-align:justify;}", compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+              for name, xhtml in content_files:
+                  z.writestr("OEBPS/"+name, xhtml, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+          with zipfile.ZipFile(out) as z:
+              assert z.read("mimetype") == b"application/epub+zip"
+              assert "OEBPS/content.opf" in z.namelist()
+          print("EPUB generado:", os.path.getsize(out), "bytes")
+          PY
+      - name: Publish EPUB in the repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalog/books/noches-blancas.epub
+          if ! git diff --cached --quiet; then
+            git commit -m "Add Noches Blancas EPUB edition"
+            git push
+          fi
