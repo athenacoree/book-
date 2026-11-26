@@ -55,7 +55,6 @@ data class GutendexBook(
     val epubDownloadUrl: String?
         get() = formats["application/epub+zip"]
             ?: formats.entries.firstOrNull { it.key.contains("epub", ignoreCase = true) }?.value
-            ?: formats["application/pdf"]
 
     val coverImageUrl: String?
         get() = formats["image/jpeg"]
@@ -140,7 +139,7 @@ class OnlineCatalogService {
             apiKey = apiKey,
             authorization = "Bearer $anonKey",
             itemType = "eq.book",
-            fileFormat = "in.(epub,pdf)",
+            fileFormat = "eq.epub",
             title = catalogTitleFilter(normalizedQuery)
         )
         items.asSequence()
@@ -149,11 +148,7 @@ class OnlineCatalogService {
             .map { item ->
                 val fileUrl = publicStorageUrl(item.storagePath)
                 val formats = buildMap {
-                    if (item.fileFormat.equals("pdf", ignoreCase = true)) {
-                        put("application/pdf", fileUrl)
-                    } else {
-                        put("application/epub+zip", fileUrl)
-                    }
+                    put("application/epub+zip", fileUrl)
                     item.coverPath?.takeIf { it.isNotBlank() }?.let {
                         put("image/jpeg", publicStorageUrl(it))
                     }
@@ -246,7 +241,7 @@ class OnlineCatalogService {
 
     private fun requireAllowedDownloadUrl(rawUrl: String) {
         val uri = Uri.parse(rawUrl)
-        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "aleph.gutenberg.org", "gutenberg.org", "raw.githubusercontent.com", "bibliotecadigital.ilce.edu.mx")
+        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "aleph.gutenberg.org", "gutenberg.org", "raw.githubusercontent.com")
         require(uri.scheme.equals("https", true) && uri.userInfo == null && uri.port == -1 &&
             uri.host?.lowercase() in allowedHosts) { "La dirección de descarga no está permitida" }
     }
@@ -258,7 +253,7 @@ class OnlineCatalogService {
             val host = uri.host?.lowercase()
             require(uri.scheme.equals("https", ignoreCase = true) &&
                 uri.userInfo == null && uri.port == -1 &&
-                host in setOf("www.gutenberg.org", "raw.githubusercontent.com", "bibliotecadigital.ilce.edu.mx")) {
+                host in setOf("www.gutenberg.org", "raw.githubusercontent.com")) {
                 "La fuente externa del catálogo no está permitida"
             }
             return candidate
