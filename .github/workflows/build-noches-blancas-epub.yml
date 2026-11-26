@@ -29,17 +29,17 @@ jobs:
           for i, page in enumerate(doc):
               if i == 0:
                   continue
-              lines = [re.sub(r"\\s+", " ", x).strip() for x in page.get_text("text").splitlines()]
-              lines = [x for x in lines if x and not re.search(r"bibliotecadigital\\.ilce\\.edu\\.mx", x, re.I)]
-              lines = [x for x in lines if not re.fullmatch(r"\\d{1,3}", x) and x.upper() not in {"NOCHES BLANCAS", "DOSTOIEVSKI"}]
-              text = re.sub(r"\\s+", " ", " ".join(lines)).strip()
+              lines = [re.sub(r"\s+", " ", x).strip() for x in page.get_text("text").splitlines()]
+              lines = [x for x in lines if x and not re.search(r"bibliotecadigital\.ilce\.edu\.mx", x, re.I)]
+              lines = [x for x in lines if not re.fullmatch(r"\d{1,3}", x) and x.upper() not in {"NOCHES BLANCAS", "DOSTOIEVSKI"}]
+              text = re.sub(r"\s+", " ", " ".join(lines)).strip()
               if text:
                   pages.append(text)
-          full = "\\n".join(pages)
+          full = "\n".join(pages)
           headings = ["PRIMERA NOCHE", "SEGUNDA NOCHE", "HISTORIA DE NÁSTENKA", "TERCERA NOCHE", "CUARTA NOCHE", "LA MAÑANA"]
           for h in headings:
-              full = re.sub(r"\\s*" + re.escape(h) + r"\\s*", "\\n\\n@@"+h+"@@\\n\\n", full, flags=re.I)
-          chunks = re.split(r"\\n\\n@@(.*?)@@\\n\\n", full)
+              full = re.sub(r"\s*" + re.escape(h) + r"\s*", "\n\n@@"+h+"@@\n\n", full, flags=re.I)
+          chunks = re.split(r"\n\n@@(.*?)@@\n\n", full)
           sections = []
           if chunks[0].strip():
               sections.append(("Inicio", chunks[0].strip()))
@@ -53,7 +53,7 @@ jobs:
           nav, manifest, spine = [], [], []
           content_files = []
           for i, (title, body) in enumerate(sections, 1):
-              paragraphs = re.split(r"(?<=[.!?…])\\s+(?=[—A-ZÁÉÍÓÚÜ¿¡])", body)
+              paragraphs = re.split(r"(?<=[.!?…])\s+(?=[—A-ZÁÉÍÓÚÜ¿¡])", body)
               body_html = "".join("<p>"+html.escape(p.strip())+"</p>" for p in paragraphs if p.strip())
               name = f"chapter{i}.xhtml"
               xhtml = f'<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="es"><head><title>{html.escape(title)}</title><meta charset="utf-8"/><link rel="stylesheet" href="style.css"/></head><body><h1>{html.escape(title)}</h1>{body_html}</body></html>'
