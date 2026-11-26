@@ -241,7 +241,7 @@ class OnlineCatalogService {
 
     private fun requireAllowedDownloadUrl(rawUrl: String) {
         val uri = Uri.parse(rawUrl)
-        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "aleph.gutenberg.org", "gutenberg.org", "raw.githubusercontent.com")
+        val allowedHosts = setOf(Uri.parse(baseUrl).host?.lowercase(), "www.gutenberg.org", "aleph.gutenberg.org", "gutenberg.org", "raw.githubusercontent.com", "codeload.github.com")
         require(uri.scheme.equals("https", true) && uri.userInfo == null && uri.port == -1 &&
             uri.host?.lowercase() in allowedHosts) { "La dirección de descarga no está permitida" }
     }
@@ -253,7 +253,7 @@ class OnlineCatalogService {
             val host = uri.host?.lowercase()
             require(uri.scheme.equals("https", ignoreCase = true) &&
                 uri.userInfo == null && uri.port == -1 &&
-                host in setOf("www.gutenberg.org", "raw.githubusercontent.com")) {
+                host in setOf("www.gutenberg.org", "raw.githubusercontent.com", "codeload.github.com")) {
                 "La fuente externa del catálogo no está permitida"
             }
             return candidate
